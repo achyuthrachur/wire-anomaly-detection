@@ -17,6 +17,7 @@ import { formatDate, formatNumber } from '@/lib/utils/index';
 import { ArrowLeft, AlertTriangle, FileSpreadsheet, Tag, Play } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { StartBakeoffDialog } from '@/components/bakeoff/StartBakeoffDialog';
 
 export default function DatasetDetailPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const { datasetId } = use(params);
@@ -155,17 +156,29 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
                     )}
                   </div>
                 </div>
-                {/* Score button for scoring datasets */}
-                {dataset.dataset_role === 'scoring' && hasChampion && (
-                  <Button
-                    onClick={handleStartScoring}
-                    disabled={scoringLoading}
-                    className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white"
-                  >
-                    <Play className="h-4 w-4" />
-                    {scoringLoading ? 'Starting...' : 'Score with Champion'}
-                  </Button>
-                )}
+                {/* Action buttons */}
+                <div className="flex shrink-0 gap-2">
+                  {/* Bake-off button for training datasets with labels */}
+                  {dataset.dataset_role === 'training' && (
+                    <StartBakeoffDialog
+                      datasetId={dataset.id}
+                      datasetName={dataset.name}
+                      labelPresent={dataset.label_present}
+                      onStarted={() => {}}
+                    />
+                  )}
+                  {/* Score button for scoring datasets when champion exists */}
+                  {dataset.dataset_role === 'scoring' && hasChampion && (
+                    <Button
+                      onClick={handleStartScoring}
+                      disabled={scoringLoading}
+                      className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white"
+                    >
+                      <Play className="h-4 w-4" />
+                      {scoringLoading ? 'Starting...' : 'Score with Champion'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
