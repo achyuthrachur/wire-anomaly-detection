@@ -54,3 +54,31 @@ export interface BakeoffResult {
   narrativeShort: string;
   narrativeLong: string;
 }
+
+// ---------------------------------------------------------------------------
+// Stage 3: Normalization Context (for scoring with training-time stats)
+// ---------------------------------------------------------------------------
+
+export interface NormalizationContext {
+  numericStats: Record<string, { mean: number; std: number }>;
+  categoricalMappings: Record<string, string[]>;
+}
+
+export interface FeatureMatrixWithNorm extends FeatureMatrix {
+  normContext: NormalizationContext;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: SHAP types
+// ---------------------------------------------------------------------------
+
+export interface ShapValues {
+  values: number[];
+  baseValue: number;
+  featureNames: string[];
+}
+
+export interface GlobalShapSummary {
+  meanAbsShap: Record<string, number>;
+  topFeatures: Array<{ feature: string; meanAbsShap: number }>;
+}

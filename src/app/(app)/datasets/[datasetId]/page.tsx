@@ -14,15 +14,21 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Dataset, Run } from '@/lib/db/types';
 import { formatDate, formatNumber } from '@/lib/utils/index';
-import { ArrowLeft, AlertTriangle, FileSpreadsheet, Tag } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileSpreadsheet, Tag, Play } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function DatasetDetailPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const { datasetId } = use(params);
+  const router = useRouter();
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [latestRun, setLatestRun] = useState<Run | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scoringLoading, setScoringLoading] = useState(false);
+  const [models, setModels] = useState<
+    Array<{ id: string; name: string; champion_version_id: string | null }>
+  >([]);
 
   useEffect(() => {
     async function fetchDataset() {
@@ -40,6 +46,48 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
     }
     fetchDataset();
   }, [datasetId]);
+
+  // Fetch models for scoring action
+  useEffect(() => {
+    async function fetchModels() {
+      try {
+        const res = await fetch('/api/models/list');
+        if (res.ok) {
+          const data = await res.json();
+          setModels(data.models ?? []);
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchModels();
+  }, []);
+
+  const handleStartScoring = async () => {
+    if (!dataset) return;
+    const modelWithChampion = models.find((m) => m.champion_version_id);
+    if (!modelWithChampion) return;
+
+    setScoringLoading(true);
+    try {
+      const res = await fetch('/api/score/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          modelId: modelWithChampion.id,
+          reviewRate: 0.005,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to start scoring');
+      const data = await res.json();
+      router.push(`/runs/${data.runId}/findings`);
+    } catch {
+      setScoringLoading(false);
+    }
+  };
+
+  const hasChampion = models.some((m) => m.champion_version_id);
 
   return (
     <PageContainer>
@@ -107,6 +155,17 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
                     )}
                   </div>
                 </div>
+                {/* Score button for scoring datasets */}
+                {dataset.dataset_role === 'scoring' && hasChampion && (
+                  <Button
+                    onClick={handleStartScoring}
+                    disabled={scoringLoading}
+                    className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white"
+                  >
+                    <Play className="h-4 w-4" />
+                    {scoringLoading ? 'Starting...' : 'Score with Champion'}
+                  </Button>
+                )}
               </div>
             </div>
 

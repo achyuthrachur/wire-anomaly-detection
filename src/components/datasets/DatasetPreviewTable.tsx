@@ -11,23 +11,32 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Eye, EyeOff } from 'lucide-react';
 import { formatNumber } from '@/lib/utils/index';
 
 interface DatasetPreviewTableProps {
   datasetId: string;
   totalRows: number;
+  hideLabelsByDefault?: boolean;
 }
 
 const PAGE_SIZE = 200;
 
-export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTableProps) {
+const LABEL_COLUMNS = new Set(['isanomaly', 'is_anomaly', 'label', 'target', 'fraud', 'flag']);
+
+export function DatasetPreviewTable({
+  datasetId,
+  totalRows,
+  hideLabelsByDefault = false,
+}: DatasetPreviewTableProps) {
   const [columns, setColumns] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showLabels, setShowLabels] = useState(!hideLabelsByDefault);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
 
   const fetchPage = useCallback(
     async (pageOffset: number) => {
@@ -55,11 +64,31 @@ export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTabl
     fetchPage(0);
   }, [fetchPage]);
 
+  // Compute visible columns (respecting label hiding and hidden columns)
+  const visibleColumnIndices = useMemo(() => {
+    return columns
+      .map((col, idx) => ({ col, idx }))
+      .filter(({ col }) => {
+        if (hiddenColumns.has(col)) return false;
+        if (!showLabels && LABEL_COLUMNS.has(col.toLowerCase())) return false;
+        return true;
+      })
+      .map(({ idx }) => idx);
+  }, [columns, showLabels, hiddenColumns]);
+
+  const visibleColumns = useMemo(
+    () => visibleColumnIndices.map((i) => columns[i]),
+    [visibleColumnIndices, columns]
+  );
+
   const filteredRows = useMemo(() => {
-    if (!search.trim()) return rows;
+    const baseRows = rows.map((row) => visibleColumnIndices.map((i) => row[i]));
+    if (!search.trim()) return baseRows;
     const term = search.toLowerCase();
-    return rows.filter((row) => row.some((cell) => cell.toLowerCase().includes(term)));
-  }, [rows, search]);
+    return baseRows.filter((row) => row.some((cell) => cell.toLowerCase().includes(term)));
+  }, [rows, search, visibleColumnIndices]);
+
+  const hasLabelColumn = columns.some((c) => LABEL_COLUMNS.has(c.toLowerCase()));
 
   const canPrev = offset > 0;
   const canNext = offset + PAGE_SIZE < totalRows;
@@ -82,6 +111,17 @@ export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTabl
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
+          {hasLabelColumn && hideLabelsByDefault && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLabels(!showLabels)}
+              className="gap-1.5 text-xs"
+            >
+              {showLabels ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showLabels ? 'Hide Labels' : 'Show Labels (Demo)'}
+            </Button>
+          )}
           <span className="text-muted-foreground text-sm">
             Showing {formatNumber(rangeStart, 0)}&ndash;{formatNumber(rangeEnd, 0)} of{' '}
             {formatNumber(totalRows, 0)}
@@ -122,13 +162,13 @@ export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTabl
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                {loading && columns.length === 0
+                {loading && visibleColumns.length === 0
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <TableHead key={i}>
                         <Skeleton className="h-4 w-20" />
                       </TableHead>
                     ))
-                  : columns.map((col) => (
+                  : visibleColumns.map((col) => (
                       <TableHead
                         key={col}
                         className="bg-muted/95 text-tint-500 sticky top-0 z-10 text-xs font-semibold tracking-wider uppercase backdrop-blur-sm"
@@ -142,7 +182,7 @@ export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTabl
               {loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: columns.length || 5 }).map((_, j) => (
+                    {Array.from({ length: visibleColumns.length || 5 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -152,7 +192,7 @@ export function DatasetPreviewTable({ datasetId, totalRows }: DatasetPreviewTabl
               ) : filteredRows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={columns.length}
+                    colSpan={visibleColumns.length}
                     className="text-muted-foreground h-24 text-center"
                   >
                     {search ? 'No matching rows found.' : 'No data available.'}

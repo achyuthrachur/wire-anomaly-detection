@@ -121,4 +121,78 @@ export async function migrate() {
 
   await sql(`CREATE INDEX IF NOT EXISTS idx_bakeoffs_model_id ON bakeoffs(model_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_bakeoffs_status ON bakeoffs(status)`);
+
+  // ---------------------------------------------------------------------------
+  // Stage 3: Extend runs for scoring outputs
+  // ---------------------------------------------------------------------------
+
+  // Drop old CHECK constraint and re-add with scoring statuses
+  await sql(`
+    DO $$
+    BEGIN
+      ALTER TABLE runs DROP CONSTRAINT IF EXISTS runs_status_check;
+      ALTER TABLE runs ADD CONSTRAINT runs_status_check
+        CHECK (status IN ('created','validated','failed','scoring','scored'));
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END $$
+  `);
+
+  await sql(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS model_version_id UUID REFERENCES model_versions(id) ON DELETE SET NULL
+  `);
+  await sql(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS outputs_blob_url TEXT
+  `);
+  await sql(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS summary_json JSONB NOT NULL DEFAULT '{}'::jsonb
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Stage 3: Findings table
+  // ---------------------------------------------------------------------------
+
+  await sql(`
+    CREATE TABLE IF NOT EXISTS findings (
+      id                    UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id                UUID             NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+
+      wire_id               TEXT             NOT NULL,
+      rank                  INTEGER          NOT NULL,
+      score                 DOUBLE PRECISION NOT NULL,
+      predicted_label       BOOLEAN          NOT NULL,
+
+      reason_codes_json     JSONB            NOT NULL DEFAULT '[]'::jsonb,
+      local_explain_blob_url TEXT,
+
+      created_at            TIMESTAMPTZ      NOT NULL DEFAULT now()
+    )
+  `);
+
+  await sql(`CREATE INDEX IF NOT EXISTS idx_findings_run_id ON findings(run_id)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_findings_score ON findings(score DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_findings_wire_id ON findings(wire_id)`);
+
+  // ---------------------------------------------------------------------------
+  // Stage 3: Synthetic jobs table
+  // ---------------------------------------------------------------------------
+
+  await sql(`
+    CREATE TABLE IF NOT EXISTS synthetic_jobs (
+      id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      status                TEXT        NOT NULL CHECK (status IN ('queued','running','completed','failed')),
+      config_json           JSONB       NOT NULL,
+      training_dataset_id   UUID        REFERENCES datasets(id),
+      scoring_dataset_id    UUID        REFERENCES datasets(id),
+      started_at            TIMESTAMPTZ,
+      completed_at          TIMESTAMPTZ,
+      error_json            JSONB,
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await sql(`CREATE INDEX IF NOT EXISTS idx_synthetic_jobs_status ON synthetic_jobs(status)`);
 }

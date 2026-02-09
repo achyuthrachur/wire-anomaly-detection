@@ -3,9 +3,10 @@
 // Pure TypeScript — no external ML libraries
 // ---------------------------------------------------------------------------
 
-import type { TrainedModel } from './types';
+import type { TrainedModel, ShapValues } from './types';
 import { computePrAuc } from './metrics';
 import { seededRandom } from './algorithms/decision-tree';
+import { matchReasonCodes } from './reason-code-templates';
 
 // ---------------------------------------------------------------------------
 // Permutation Importance
@@ -92,10 +93,30 @@ export interface ReasonCode {
 /**
  * Generate human-readable reason codes for why a transaction was flagged.
  *
- * Uses template-based matching on feature names and importance scores,
- * plus generic reason codes for top-importance features without templates.
+ * When shapValues are provided, uses SHAP-based ranking for per-row specificity.
+ * Falls back to template-based matching on feature names and importance scores.
  */
 export function generateReasonCodes(
+  features: number[],
+  featureNames: string[],
+  importance: Record<string, number>,
+  shapValues?: ShapValues
+): ReasonCode[] {
+  // If SHAP values are available, use the template-based matcher with SHAP
+  if (shapValues) {
+    const matched = matchReasonCodes(featureNames, features, shapValues.values, importance, 5);
+    if (matched.length > 0) {
+      return matched;
+    }
+  }
+
+  return generateReasonCodesLegacy(features, featureNames, importance);
+}
+
+/**
+ * Legacy reason code generation (pre-SHAP, template-based).
+ */
+function generateReasonCodesLegacy(
   features: number[],
   featureNames: string[],
   importance: Record<string, number>

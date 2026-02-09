@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { cn } from '@/lib/utils';
-import { Upload, List, Info, Database, Box, FlaskConical } from 'lucide-react';
+import { Upload, List, Info, Database, Box, FlaskConical, Wand2 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/upload', label: 'Upload', icon: Upload },
   { href: '/runs', label: 'Runs', icon: List },
   { href: '/datasets', label: 'Datasets', icon: Database },
   { href: '/models', label: 'Models', icon: Box },
+  { href: '/synthetic', label: 'Synthetic', icon: Wand2 },
   { href: '/dashboard', label: 'Dashboard', icon: Info },
 ];
 

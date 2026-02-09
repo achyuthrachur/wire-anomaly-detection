@@ -51,10 +51,26 @@ export interface Dataset {
 export interface Run {
   id: string;
   dataset_id: string;
-  status: 'created' | 'validated' | 'failed';
+  status: 'created' | 'validated' | 'failed' | 'scoring' | 'scored';
   validation_json: ValidationResult;
   profiling_json: ProfilingResult;
+  model_version_id: string | null;
+  outputs_blob_url: string | null;
+  summary_json: ScoringsSummary;
   created_at: string;
+}
+
+export interface ScoringsSummary {
+  reviewRate?: number;
+  thresholdUsed?: number;
+  flaggedCount?: number;
+  rowCount?: number;
+  metricsIfLabelsPresent?: {
+    precision: number;
+    recall: number;
+    f1: number;
+  } | null;
+  globalShapTopFeatures?: Array<{ feature: string; meanAbsShap: number }>;
 }
 
 export interface RunWithDataset extends Run {
@@ -268,4 +284,136 @@ export const StartBakeoffRequestSchema = z.object({
 
 export const SetChampionRequestSchema = z.object({
   modelVersionId: z.string().uuid(),
+});
+
+// ---------------------------------------------------------------------------
+// Stage 3: Finding
+// ---------------------------------------------------------------------------
+
+export interface Finding {
+  id: string;
+  run_id: string;
+  wire_id: string;
+  rank: number;
+  score: number;
+  predicted_label: boolean;
+  reason_codes_json: ReasonCodeEntry[];
+  local_explain_blob_url: string | null;
+  created_at: string;
+}
+
+export interface ReasonCodeEntry {
+  code: string;
+  description: string;
+  contribution: 'high' | 'medium' | 'low';
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Synthetic Job
+// ---------------------------------------------------------------------------
+
+export type SyntheticJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface SyntheticJob {
+  id: string;
+  status: SyntheticJobStatus;
+  config_json: SyntheticConfig;
+  training_dataset_id: string | null;
+  scoring_dataset_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface SyntheticConfig {
+  seed: number;
+  training: {
+    nRows: number;
+    dateStart: string;
+    dateEnd: string;
+    anomalyRate: number;
+  };
+  scoring: {
+    nRows: number;
+    dateStart: string;
+    dateEnd: string;
+    anomalyRate: number;
+    hideLabelsByDefault: boolean;
+  };
+  population: {
+    initiators: number;
+    reviewers: number;
+    customers: number;
+    beneficiaries: number;
+  };
+  distributions: {
+    amount: { family: string; mu: number; sigma: number };
+    wiresPerCustomer: { family: string; mean: number; dispersion: number };
+  };
+  anomalyMix: {
+    highAmount: number;
+    burst: number;
+    outOfHoursIrregular: number;
+    riskCorridorCallbackBypass: number;
+    sodException: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Zod schemas for request validation
+// ---------------------------------------------------------------------------
+
+export const StartScoringRequestSchema = z.object({
+  datasetId: z.string().uuid(),
+  modelId: z.string().uuid(),
+  modelVersionId: z.string().uuid().nullable().optional(),
+  useChampionIfNull: z.boolean().optional().default(true),
+  reviewRate: z.number().min(0.0001).max(1).optional(),
+  threshold: z.number().min(0).max(1).nullable().optional(),
+});
+
+export const StartSyntheticRequestSchema = z.object({
+  config: z.object({
+    seed: z.number().int(),
+    training: z.object({
+      nRows: z.number().int().min(100).max(500000),
+      dateStart: z.string(),
+      dateEnd: z.string(),
+      anomalyRate: z.number().min(0).max(1),
+    }),
+    scoring: z.object({
+      nRows: z.number().int().min(100).max(500000),
+      dateStart: z.string(),
+      dateEnd: z.string(),
+      anomalyRate: z.number().min(0).max(1),
+      hideLabelsByDefault: z.boolean(),
+    }),
+    population: z.object({
+      initiators: z.number().int().min(1),
+      reviewers: z.number().int().min(1),
+      customers: z.number().int().min(1),
+      beneficiaries: z.number().int().min(1),
+    }),
+    distributions: z.object({
+      amount: z.object({
+        family: z.string(),
+        mu: z.number(),
+        sigma: z.number(),
+      }),
+      wiresPerCustomer: z.object({
+        family: z.string(),
+        mean: z.number(),
+        dispersion: z.number(),
+      }),
+    }),
+    anomalyMix: z.object({
+      highAmount: z.number().min(0).max(1),
+      burst: z.number().min(0).max(1),
+      outOfHoursIrregular: z.number().min(0).max(1),
+      riskCorridorCallbackBypass: z.number().min(0).max(1),
+      sodException: z.number().min(0).max(1),
+    }),
+  }),
+  outputFormat: z.enum(['csv', 'xlsx']).optional().default('csv'),
 });

@@ -16,7 +16,15 @@ export async function GET(
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ run });
+    // Include scoring fields for scored runs
+    return NextResponse.json({
+      run: {
+        ...run,
+        model_version_id: run.model_version_id ?? null,
+        outputs_blob_url: run.outputs_blob_url ?? null,
+        summary_json: run.summary_json ?? {},
+      },
+    });
   } catch (error) {
     log.error({ error }, 'Failed to get run');
     return NextResponse.json(

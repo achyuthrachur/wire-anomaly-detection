@@ -12,6 +12,12 @@ import type {
   BakeoffStatus,
   MetricsResult,
   RubricConfig,
+  Finding,
+  SyntheticJob,
+  SyntheticJobStatus,
+  SyntheticConfig,
+  ScoringsSummary,
+  ReasonCodeEntry,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -351,4 +357,245 @@ export async function listBakeoffsByModelId(modelId: string): Promise<Bakeoff[]>
     modelId,
   ]);
   return rows as unknown as Bakeoff[];
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Synthetic Jobs
+// ---------------------------------------------------------------------------
+
+export async function insertSyntheticJob(config: SyntheticConfig): Promise<SyntheticJob> {
+  const rows = await sql(
+    `INSERT INTO synthetic_jobs (status, config_json) VALUES ('queued', $1) RETURNING *`,
+    [JSON.stringify(config)]
+  );
+  return rows[0] as unknown as SyntheticJob;
+}
+
+export async function updateSyntheticJobStatus(
+  id: string,
+  status: SyntheticJobStatus,
+  extra?: {
+    trainingDatasetId?: string;
+    scoringDatasetId?: string;
+    errorJson?: Record<string, unknown>;
+  }
+): Promise<void> {
+  const sets: string[] = ['status = $1'];
+  const params: unknown[] = [status];
+  let idx = 2;
+
+  if (status === 'running') {
+    sets.push(`started_at = now()`);
+  }
+  if (status === 'completed' || status === 'failed') {
+    sets.push(`completed_at = now()`);
+  }
+  if (extra?.trainingDatasetId) {
+    sets.push(`training_dataset_id = $${idx}`);
+    params.push(extra.trainingDatasetId);
+    idx++;
+  }
+  if (extra?.scoringDatasetId) {
+    sets.push(`scoring_dataset_id = $${idx}`);
+    params.push(extra.scoringDatasetId);
+    idx++;
+  }
+  if (extra?.errorJson) {
+    sets.push(`error_json = $${idx}`);
+    params.push(JSON.stringify(extra.errorJson));
+    idx++;
+  }
+
+  params.push(id);
+  await sql(`UPDATE synthetic_jobs SET ${sets.join(', ')} WHERE id = $${idx}`, params);
+}
+
+export async function getSyntheticJobById(id: string): Promise<SyntheticJob | null> {
+  const rows = await sql(`SELECT * FROM synthetic_jobs WHERE id = $1`, [id]);
+  return (rows[0] as unknown as SyntheticJob) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Findings
+// ---------------------------------------------------------------------------
+
+export async function insertFindingsBatch(
+  findings: Array<{
+    run_id: string;
+    wire_id: string;
+    rank: number;
+    score: number;
+    predicted_label: boolean;
+    reason_codes_json: ReasonCodeEntry[];
+    local_explain_blob_url: string | null;
+  }>
+): Promise<void> {
+  if (findings.length === 0) return;
+
+  // Batch insert in chunks of 100
+  const chunkSize = 100;
+  for (let i = 0; i < findings.length; i += chunkSize) {
+    const chunk = findings.slice(i, i + chunkSize);
+    const values: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+
+    for (const f of chunk) {
+      values.push(
+        `($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6})`
+      );
+      params.push(
+        f.run_id,
+        f.wire_id,
+        f.rank,
+        f.score,
+        f.predicted_label,
+        JSON.stringify(f.reason_codes_json),
+        f.local_explain_blob_url
+      );
+      paramIdx += 7;
+    }
+
+    await sql(
+      `INSERT INTO findings (run_id, wire_id, rank, score, predicted_label, reason_codes_json, local_explain_blob_url)
+       VALUES ${values.join(', ')}`,
+      params
+    );
+  }
+}
+
+export async function listFindingsByRunId(
+  runId: string,
+  offset: number = 0,
+  limit: number = 100,
+  filters?: {
+    minScore?: number;
+    maxScore?: number;
+    reasonCodes?: string[];
+  }
+): Promise<Finding[]> {
+  const conditions: string[] = ['run_id = $1'];
+  const params: unknown[] = [runId];
+  let idx = 2;
+
+  if (filters?.minScore !== undefined) {
+    conditions.push(`score >= $${idx}`);
+    params.push(filters.minScore);
+    idx++;
+  }
+  if (filters?.maxScore !== undefined) {
+    conditions.push(`score <= $${idx}`);
+    params.push(filters.maxScore);
+    idx++;
+  }
+  if (filters?.reasonCodes && filters.reasonCodes.length > 0) {
+    // Check if any of the reason codes exist in the JSONB array
+    const rcConditions = filters.reasonCodes.map((code) => {
+      params.push(code);
+      return `reason_codes_json @> ('[{"code":"' || $${idx++} || '"}]')::jsonb`;
+    });
+    conditions.push(`(${rcConditions.join(' OR ')})`);
+  }
+
+  params.push(limit, offset);
+  const rows = await sql(
+    `SELECT * FROM findings
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY rank ASC
+     LIMIT $${idx} OFFSET $${idx + 1}`,
+    params
+  );
+  return rows as unknown as Finding[];
+}
+
+export async function getFindingByWireId(runId: string, wireId: string): Promise<Finding | null> {
+  const rows = await sql(`SELECT * FROM findings WHERE run_id = $1 AND wire_id = $2 LIMIT 1`, [
+    runId,
+    wireId,
+  ]);
+  return (rows[0] as unknown as Finding) ?? null;
+}
+
+export async function countFindingsByRunId(
+  runId: string,
+  filters?: {
+    minScore?: number;
+    maxScore?: number;
+    reasonCodes?: string[];
+  }
+): Promise<number> {
+  const conditions: string[] = ['run_id = $1'];
+  const params: unknown[] = [runId];
+  let idx = 2;
+
+  if (filters?.minScore !== undefined) {
+    conditions.push(`score >= $${idx}`);
+    params.push(filters.minScore);
+    idx++;
+  }
+  if (filters?.maxScore !== undefined) {
+    conditions.push(`score <= $${idx}`);
+    params.push(filters.maxScore);
+    idx++;
+  }
+  if (filters?.reasonCodes && filters.reasonCodes.length > 0) {
+    const rcConditions = filters.reasonCodes.map((code) => {
+      params.push(code);
+      return `reason_codes_json @> ('[{"code":"' || $${idx++} || '"}]')::jsonb`;
+    });
+    conditions.push(`(${rcConditions.join(' OR ')})`);
+  }
+
+  const rows = await sql(
+    `SELECT COUNT(*)::int AS count FROM findings WHERE ${conditions.join(' AND ')}`,
+    params
+  );
+  return (rows[0] as unknown as { count: number }).count;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Run scoring updates
+// ---------------------------------------------------------------------------
+
+export async function updateRunScoring(
+  runId: string,
+  status: 'scoring' | 'scored' | 'failed',
+  modelVersionId?: string,
+  outputsBlobUrl?: string,
+  summaryJson?: ScoringsSummary
+): Promise<void> {
+  const sets: string[] = ['status = $1'];
+  const params: unknown[] = [status];
+  let idx = 2;
+
+  if (modelVersionId !== undefined) {
+    sets.push(`model_version_id = $${idx}`);
+    params.push(modelVersionId);
+    idx++;
+  }
+  if (outputsBlobUrl !== undefined) {
+    sets.push(`outputs_blob_url = $${idx}`);
+    params.push(outputsBlobUrl);
+    idx++;
+  }
+  if (summaryJson !== undefined) {
+    sets.push(`summary_json = $${idx}`);
+    params.push(JSON.stringify(summaryJson));
+    idx++;
+  }
+
+  params.push(runId);
+  await sql(`UPDATE runs SET ${sets.join(', ')} WHERE id = $${idx}`, params);
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Champion lookup
+// ---------------------------------------------------------------------------
+
+export async function getChampionVersionByModelId(modelId: string): Promise<ModelVersion | null> {
+  const rows = await sql(
+    `SELECT * FROM model_versions WHERE model_id = $1 AND is_champion = true LIMIT 1`,
+    [modelId]
+  );
+  return (rows[0] as unknown as ModelVersion) ?? null;
 }

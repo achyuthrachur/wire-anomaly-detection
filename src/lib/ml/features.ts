@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { mean, standardDeviation } from '@/lib/profiling/stats';
-import type { FeatureMatrix } from './types';
+import type { FeatureMatrix, NormalizationContext, FeatureMatrixWithNorm } from './types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,13 +40,26 @@ function parseDate(value: string | undefined): Date | null {
 // Main function
 // ---------------------------------------------------------------------------
 
+/**
+ * Build a numeric feature matrix from raw parsed rows.
+ *
+ * When `normContext` is undefined (training mode): compute stats from data and return them.
+ * When `normContext` is provided (scoring mode): use saved stats for z-score and category mappings.
+ */
 export function buildFeatureMatrix(
   rows: Record<string, string>[],
   schema: { columns: Array<{ name: string; type: string }> },
-  labelColumn: string
-): FeatureMatrix {
+  labelColumn: string,
+  normContext?: NormalizationContext
+): FeatureMatrixWithNorm {
   if (rows.length === 0) {
-    return { X: [], y: [], featureNames: [], labelColumn };
+    return {
+      X: [],
+      y: [],
+      featureNames: [],
+      labelColumn,
+      normContext: normContext ?? { numericStats: {}, categoricalMappings: {} },
+    };
   }
 
   // Parse labels
@@ -78,25 +91,36 @@ export function buildFeatureMatrix(
         booleanCols.push(col);
         break;
       default:
-        // Treat unknown types as categorical
         categoricalCols.push(col);
         break;
     }
   }
 
+  // Build normalization context if not provided (training mode)
+  const builtNumericStats: Record<string, { mean: number; std: number }> = {};
+  const builtCategoricalMappings: Record<string, string[]> = {};
+
   // We build feature columns one by one, then assemble the matrix
-  const featureColumns: number[][] = []; // each inner array is n_samples long
+  const featureColumns: number[][] = [];
   const featureNames: string[] = [];
 
   // ---- Numeric columns: z-score normalize ----
   for (const col of numericCols) {
     const rawValues = rows.map((row) => parseNumeric(row[col.name]));
-    const validValues = rawValues.filter((v) => !isNaN(v));
-    const mu = mean(validValues);
-    const sigma = standardDeviation(validValues);
+
+    let mu: number, sigma: number;
+    if (normContext?.numericStats[col.name]) {
+      mu = normContext.numericStats[col.name].mean;
+      sigma = normContext.numericStats[col.name].std;
+    } else {
+      const validValues = rawValues.filter((v) => !isNaN(v));
+      mu = mean(validValues);
+      sigma = standardDeviation(validValues);
+    }
+    builtNumericStats[col.name] = { mean: mu, std: sigma };
 
     const normalized = rawValues.map((v) => {
-      if (isNaN(v)) return 0; // missing values get 0
+      if (isNaN(v)) return 0;
       if (sigma === 0) return 0;
       return (v - mu) / sigma;
     });
@@ -110,48 +134,61 @@ export function buildFeatureMatrix(
     const lowerName = col.name.toLowerCase();
     if (lowerName === 'amount' || lowerName.includes('amount')) {
       const rawValues = rows.map((row) => parseNumeric(row[col.name]));
-      const validValues = rawValues.filter((v) => !isNaN(v));
-      const mu = mean(validValues);
-      const sigma = standardDeviation(validValues);
+      const zScoreKey = `${col.name}_zScore`;
+      const logKey = `${col.name}_log`;
 
-      // amountZScore (same as the z-score column but named explicitly)
+      let mu: number, sigma: number;
+      if (normContext?.numericStats[zScoreKey]) {
+        mu = normContext.numericStats[zScoreKey].mean;
+        sigma = normContext.numericStats[zScoreKey].std;
+      } else {
+        const validValues = rawValues.filter((v) => !isNaN(v));
+        mu = mean(validValues);
+        sigma = standardDeviation(validValues);
+      }
+      builtNumericStats[zScoreKey] = { mean: mu, std: sigma };
+
       const zScores = rawValues.map((v) => {
         if (isNaN(v)) return 0;
         if (sigma === 0) return 0;
         return (v - mu) / sigma;
       });
 
-      // logAmount
       const logAmounts = rawValues.map((v) => {
         if (isNaN(v) || v < 0) return 0;
         return Math.log(v + 1);
       });
 
       featureColumns.push(zScores);
-      featureNames.push(`${col.name}_zScore`);
+      featureNames.push(zScoreKey);
       featureColumns.push(logAmounts);
-      featureNames.push(`${col.name}_log`);
+      featureNames.push(logKey);
     }
   }
 
-  // ---- Categorical columns: one-hot encode top 10 ----
+  // ---- Categorical columns: one-hot encode ----
   for (const col of categoricalCols) {
-    // Count value frequencies
-    const freq: Record<string, number> = {};
-    for (const row of rows) {
-      const v = String(row[col.name] ?? '').trim();
-      if (v === '') continue;
-      freq[v] = (freq[v] || 0) + 1;
+    let topValues: string[];
+
+    if (normContext?.categoricalMappings[col.name]) {
+      // Scoring mode: use training-time categories
+      topValues = normContext.categoricalMappings[col.name];
+    } else {
+      // Training mode: determine top 10
+      const freq: Record<string, number> = {};
+      for (const row of rows) {
+        const v = String(row[col.name] ?? '').trim();
+        if (v === '') continue;
+        freq[v] = (freq[v] || 0) + 1;
+      }
+      topValues = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([value]) => value);
     }
+    builtCategoricalMappings[col.name] = topValues;
 
-    // Get top 10 values by frequency
-    const top10 = Object.entries(freq)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([value]) => value);
-
-    // Create one-hot columns
-    for (const topValue of top10) {
+    for (const topValue of topValues) {
       const encoded = rows.map((row) => {
         const v = String(row[col.name] ?? '').trim();
         return v === topValue ? 1 : 0;
@@ -172,7 +209,7 @@ export function buildFeatureMatrix(
       const d = parseDate(row[col.name]);
       if (d) {
         const hour = d.getHours();
-        const dow = d.getDay(); // 0 = Sunday
+        const dow = d.getDay();
         hourOfDay.push(hour);
         dayOfWeek.push(dow);
         isWeekend.push(dow === 0 || dow === 6 ? 1 : 0);
@@ -220,5 +257,14 @@ export function buildFeatureMatrix(
     }
   }
 
-  return { X, y, featureNames, labelColumn };
+  return {
+    X,
+    y,
+    featureNames,
+    labelColumn,
+    normContext: normContext ?? {
+      numericStats: builtNumericStats,
+      categoricalMappings: builtCategoricalMappings,
+    },
+  };
 }
