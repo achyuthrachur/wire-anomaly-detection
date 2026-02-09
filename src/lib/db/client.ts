@@ -15,8 +15,9 @@ function getSql() {
 }
 
 // Wrapper that accepts a query string + params array and returns typed results.
+// neon().query() with fullResults gives us { rows, fields, ... }.
 export async function sql(query: string, params?: unknown[]) {
   const rawSql = getSql();
-  const result = await (rawSql as unknown as (query: string, params?: unknown[]) => Promise<Record<string, unknown>[]>)(query, params);
-  return result;
+  const result = await rawSql.query(query, params, { fullResults: true });
+  return result.rows as Record<string, unknown>[];
 }
