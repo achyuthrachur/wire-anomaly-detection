@@ -28,6 +28,8 @@ export interface InferredSchema {
 // Dataset
 // ---------------------------------------------------------------------------
 
+export type DatasetRole = 'uploaded' | 'training' | 'scoring';
+
 export interface Dataset {
   id: string;
   name: string;
@@ -36,6 +38,9 @@ export interface Dataset {
   schema_json: InferredSchema;
   row_count: number;
   fingerprint: string;
+  dataset_role: DatasetRole;
+  generator_config_json: Record<string, unknown> | null;
+  label_present: boolean;
   created_at: string;
 }
 
@@ -139,4 +144,128 @@ export const UploadResponseSchema = z.object({
 export const ValidateRequestSchema = z.object({
   datasetId: z.string().uuid(),
   runId: z.string().uuid(),
+});
+
+// ---------------------------------------------------------------------------
+// Stage 2: Model Registry
+// ---------------------------------------------------------------------------
+
+export interface Model {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ModelVersion {
+  id: string;
+  model_id: string;
+  algorithm: string;
+  hyperparams_json: Record<string, unknown>;
+  feature_spec_version: string;
+  trained_dataset_id: string;
+  artifact_blob_url: string;
+  metrics_json: MetricsResult;
+  global_importance_json: Record<string, number>;
+  explain_blob_url: string | null;
+  is_champion: boolean;
+  created_at: string;
+}
+
+export interface ModelWithChampion extends Model {
+  champion_version_id: string | null;
+  champion_algorithm: string | null;
+  version_count: number;
+}
+
+export interface MetricsResult {
+  prAuc: number;
+  recallAtReviewRate: number;
+  precisionAtReviewRate: number;
+  f1: number;
+  stability: number;
+  explainability: number;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2: Bake-off
+// ---------------------------------------------------------------------------
+
+export type BakeoffStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface Bakeoff {
+  id: string;
+  model_id: string;
+  dataset_id: string;
+  status: BakeoffStatus;
+  rubric_json: RubricConfig;
+  candidate_version_ids: string[];
+  champion_version_id: string | null;
+  narrative_short: string | null;
+  narrative_long: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface BakeoffWithCandidates extends Bakeoff {
+  candidates: ModelVersion[];
+  dataset_name: string;
+  model_name: string;
+}
+
+export interface RubricConfig {
+  constraints: {
+    minRecallAtReviewRate: number;
+    minPrecisionAtReviewRate: number;
+  };
+  weights: {
+    recallAtReviewRate: number;
+    prAuc: number;
+    precisionAtReviewRate: number;
+    stability: number;
+    explainability: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2: Zod schemas for request validation
+// ---------------------------------------------------------------------------
+
+export const CreateModelRequestSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export const CandidateConfigSchema = z.object({
+  algorithm: z.string(),
+  hyperparams: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const StartBakeoffRequestSchema = z.object({
+  datasetId: z.string().uuid(),
+  modelId: z.string().uuid(),
+  labelColumn: z.string().min(1),
+  reviewRate: z.number().min(0.0001).max(1).optional(),
+  candidates: z.array(CandidateConfigSchema).min(1),
+  rubric: z
+    .object({
+      constraints: z.object({
+        minRecallAtReviewRate: z.number().min(0).max(1),
+        minPrecisionAtReviewRate: z.number().min(0).max(1),
+      }),
+      weights: z.object({
+        recallAtReviewRate: z.number(),
+        prAuc: z.number(),
+        precisionAtReviewRate: z.number(),
+        stability: z.number(),
+        explainability: z.number(),
+      }),
+    })
+    .optional(),
+});
+
+export const SetChampionRequestSchema = z.object({
+  modelVersionId: z.string().uuid(),
 });
