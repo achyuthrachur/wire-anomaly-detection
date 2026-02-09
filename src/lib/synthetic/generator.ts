@@ -140,7 +140,7 @@ export function generateWireDataset(
     rows[i].WireID = `W-${String(i + 1).padStart(7, '0')}`;
   }
 
-  const csv = Papa.unparse(rows, { columns: WIRE_COLUMNS });
+  const csv = Papa.unparse(rows, { columns: WIRE_COLUMNS, newline: '\n' });
 
   return {
     csv,
