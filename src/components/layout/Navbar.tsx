@@ -4,8 +4,18 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Upload, List, Info, Database, Box, FlaskConical, Wand2 } from 'lucide-react';
+import { Upload, List, Info, Database, Box, FlaskConical, Wand2, Trash2 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/upload', label: 'Upload', icon: Upload },
@@ -18,7 +28,22 @@ const NAV_ITEMS = [
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const pathname = usePathname();
+
+  async function handleReset() {
+    setResetting(true);
+    try {
+      const res = await fetch('/api/admin/reset', { method: 'POST' });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } finally {
+      setResetting(false);
+      setResetDialogOpen(false);
+    }
+  }
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -62,6 +87,45 @@ export function Navbar() {
               </Link>
             );
           })}
+
+          <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-crowe-coral hover:text-crowe-coral-dark ml-2 gap-1.5"
+                title="Reset Demo Data"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden text-xs sm:inline">Reset</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reset all demo data?</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete all datasets, models, runs, findings, and synthetic
+                  jobs. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setResetDialogOpen(false)}
+                  disabled={resetting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-crowe-coral hover:bg-crowe-coral-dark text-white"
+                  onClick={handleReset}
+                  disabled={resetting}
+                >
+                  {resetting ? 'Deleting...' : 'Delete Everything'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </nav>
     </header>

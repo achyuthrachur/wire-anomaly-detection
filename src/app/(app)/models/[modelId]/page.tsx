@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MetricsBar } from '@/components/models/MetricsBar';
-import { ArrowLeft, AlertTriangle, Crown, FlaskConical, Layers } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Crown, Layers } from 'lucide-react';
 import type { Model, ModelVersion } from '@/lib/db/types';
 import { formatDate } from '@/lib/utils/index';
 
@@ -176,28 +176,6 @@ export default function ModelDetailPage({ params }: { params: Promise<{ modelId:
                 </StaggerChildren>
               )}
             </div>
-          </FadeIn>
-
-          {/* Link to Bake-offs */}
-          <FadeIn delay={300}>
-            <Card>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <FlaskConical className="text-muted-foreground h-5 w-5" />
-                  <div>
-                    <p className="text-foreground text-sm font-medium">Bake-offs</p>
-                    <p className="text-muted-foreground text-xs">
-                      Run comparative evaluations for this model.
-                    </p>
-                  </div>
-                </div>
-                <Link href={`/bakeoffs?modelId=${modelId}`}>
-                  <Button variant="outline" size="sm">
-                    View Bake-offs
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
           </FadeIn>
         </div>
       )}

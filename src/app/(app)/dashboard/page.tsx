@@ -5,25 +5,14 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { MetricTile } from '@/components/profiling/MetricTile';
 import { Button } from '@/components/ui/button';
 import { CardSkeleton } from '@/components/skeletons/CardSkeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import Link from 'next/link';
-import { Upload, Trash2 } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import type { RunWithDataset } from '@/lib/db/types';
 
 export default function DashboardPage() {
   const [runs, setRuns] = useState<RunWithDataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [datasetCount, setDatasetCount] = useState(0);
-  const [resetting, setResetting] = useState(false);
-  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   useEffect(() => {
     async function fetchRuns() {
@@ -54,19 +43,6 @@ export default function DashboardPage() {
     fetchDatasets();
   }, []);
 
-  async function handleReset() {
-    setResetting(true);
-    try {
-      const res = await fetch('/api/admin/reset', { method: 'POST' });
-      if (res.ok) {
-        window.location.reload();
-      }
-    } finally {
-      setResetting(false);
-      setResetDialogOpen(false);
-    }
-  }
-
   const totalRuns = runs.length;
   const validated = runs.filter((r) => r.status === 'validated').length;
   const failed = runs.filter((r) => r.status === 'failed').length;
@@ -83,47 +59,12 @@ export default function DashboardPage() {
               Overview of wire anomaly detection runs.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="text-crowe-coral gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  Reset Demo Data
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Reset all demo data?</DialogTitle>
-                  <DialogDescription>
-                    This will permanently delete all datasets, models, runs, findings, and synthetic
-                    jobs. This cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setResetDialogOpen(false)}
-                    disabled={resetting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="bg-crowe-coral hover:bg-crowe-coral-dark text-white"
-                    onClick={handleReset}
-                    disabled={resetting}
-                  >
-                    {resetting ? 'Deleting...' : 'Delete Everything'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <Link href="/upload">
-              <Button className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2">
-                <Upload className="h-4 w-4" />
-                New Upload
-              </Button>
-            </Link>
-          </div>
+          <Link href="/upload">
+            <Button className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2">
+              <Upload className="h-4 w-4" />
+              New Upload
+            </Button>
+          </Link>
         </div>
 
         {loading ? (
