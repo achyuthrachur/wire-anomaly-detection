@@ -17,7 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, ChevronLeft, ChevronRight, AlertTriangle, Search } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  Search,
+  BarChart3,
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatNumber, formatDate } from '@/lib/utils/index';
 import { cn } from '@/lib/utils';
@@ -117,11 +124,19 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
 
       {/* Header */}
       <FadeIn>
-        <div className="mb-8">
-          <h1 className="text-crowe-indigo-dark text-2xl font-bold">Scoring Findings</h1>
-          <p className="text-tint-500 mt-1 text-sm">
-            Flagged wire transfers ranked by anomaly score
-          </p>
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-crowe-indigo-dark text-2xl font-bold">Scoring Findings</h1>
+            <p className="text-tint-500 mt-1 text-sm">
+              Flagged wire transfers ranked by anomaly score
+            </p>
+          </div>
+          <Link href={`/runs/${runId}/results`}>
+            <Button variant="outline" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              View Performance Report
+            </Button>
+          </Link>
         </div>
       </FadeIn>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, useCallback, use } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
 import { DetailSkeleton } from '@/components/skeletons/DetailSkeleton';
@@ -12,12 +12,28 @@ import { ProfilingCards } from '@/components/profiling/ProfilingCards';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import type { Dataset, Run } from '@/lib/db/types';
 import { formatDate, formatNumber } from '@/lib/utils/index';
-import { ArrowLeft, AlertTriangle, FileSpreadsheet, Tag, Play } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  ArrowLeft,
+  AlertTriangle,
+  FileSpreadsheet,
+  Tag,
+  Play,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  Crown,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { StartBakeoffDialog } from '@/components/bakeoff/StartBakeoffDialog';
+
+type BakeoffStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export default function DatasetDetailPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const { datasetId } = use(params);
@@ -30,6 +46,11 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
   const [models, setModels] = useState<
     Array<{ id: string; name: string; champion_version_id: string | null }>
   >([]);
+
+  // Bake-off progress tracking
+  const [activeBakeoffId, setActiveBakeoffId] = useState<string | null>(null);
+  const [bakeoffStatus, setBakeoffStatus] = useState<BakeoffStatus | null>(null);
+  const [bakeoffChampion, setBakeoffChampion] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchDataset() {
@@ -63,6 +84,43 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
     }
     fetchModels();
   }, []);
+
+  // Poll bake-off status when one is active
+  const pollBakeoff = useCallback(async () => {
+    if (!activeBakeoffId) return;
+    try {
+      const res = await fetch(`/api/bakeoff/${activeBakeoffId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setBakeoffStatus(data.status);
+      if (data.status === 'completed') {
+        setBakeoffChampion(data.champion_version_id);
+        // Refresh models list so "Score with Champion" button appears
+        const modelsRes = await fetch('/api/models/list');
+        if (modelsRes.ok) {
+          const modelsData = await modelsRes.json();
+          setModels(modelsData.models ?? []);
+        }
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [activeBakeoffId]);
+
+  useEffect(() => {
+    if (!activeBakeoffId) return;
+    if (bakeoffStatus === 'completed' || bakeoffStatus === 'failed') return;
+
+    pollBakeoff();
+    const interval = setInterval(pollBakeoff, 2500);
+    return () => clearInterval(interval);
+  }, [activeBakeoffId, bakeoffStatus, pollBakeoff]);
+
+  const handleBakeoffStarted = (bakeoffId: string) => {
+    setActiveBakeoffId(bakeoffId);
+    setBakeoffStatus('queued');
+    setBakeoffChampion(null);
+  };
 
   const handleStartScoring = async () => {
     if (!dataset) return;
@@ -159,12 +217,12 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
                 {/* Action buttons */}
                 <div className="flex shrink-0 gap-2">
                   {/* Bake-off button for training datasets with labels */}
-                  {dataset.dataset_role === 'training' && (
+                  {dataset.dataset_role === 'training' && !activeBakeoffId && (
                     <StartBakeoffDialog
                       datasetId={dataset.id}
                       datasetName={dataset.name}
                       labelPresent={dataset.label_present}
-                      onStarted={() => {}}
+                      onStarted={handleBakeoffStarted}
                     />
                   )}
                   {/* Score button for scoring datasets when champion exists */}
@@ -181,6 +239,85 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
                 </div>
               </div>
             </div>
+
+            {/* Bake-off Progress Banner */}
+            {activeBakeoffId && bakeoffStatus && (
+              <FadeIn>
+                <Card
+                  className={cn(
+                    'border-l-4',
+                    bakeoffStatus === 'completed'
+                      ? 'border-l-crowe-teal'
+                      : bakeoffStatus === 'failed'
+                        ? 'border-l-crowe-coral'
+                        : 'border-l-crowe-indigo'
+                  )}
+                >
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {(bakeoffStatus === 'queued' || bakeoffStatus === 'running') && (
+                          <Loader2 className="text-crowe-indigo h-5 w-5 animate-spin" />
+                        )}
+                        {bakeoffStatus === 'completed' && (
+                          <CheckCircle2 className="text-crowe-teal h-5 w-5" />
+                        )}
+                        {bakeoffStatus === 'failed' && (
+                          <XCircle className="text-crowe-coral h-5 w-5" />
+                        )}
+                        <div>
+                          <p className="text-foreground text-sm font-medium">
+                            {bakeoffStatus === 'queued' && 'Bake-off queued — waiting to start...'}
+                            {bakeoffStatus === 'running' &&
+                              'Bake-off running — training all algorithms...'}
+                            {bakeoffStatus === 'completed' &&
+                              'Bake-off complete — champion selected!'}
+                            {bakeoffStatus === 'failed' && 'Bake-off failed'}
+                          </p>
+                          {(bakeoffStatus === 'queued' || bakeoffStatus === 'running') && (
+                            <p className="text-muted-foreground mt-0.5 text-xs">
+                              This may take a minute for large datasets. You can leave this page.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        {bakeoffStatus === 'completed' && (
+                          <>
+                            <Link href={`/bakeoff/${activeBakeoffId}`}>
+                              <Button variant="outline" size="sm" className="gap-1.5">
+                                <Crown className="h-3.5 w-3.5" />
+                                View Results
+                              </Button>
+                            </Link>
+                            <Link href={`/models`}>
+                              <Button variant="outline" size="sm" className="gap-1.5">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Models
+                              </Button>
+                            </Link>
+                          </>
+                        )}
+                        {(bakeoffStatus === 'queued' || bakeoffStatus === 'running') && (
+                          <Link href={`/bakeoff/${activeBakeoffId}`}>
+                            <Button variant="outline" size="sm" className="gap-1.5">
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Full Details
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                    {(bakeoffStatus === 'queued' || bakeoffStatus === 'running') && (
+                      <Progress
+                        value={bakeoffStatus === 'queued' ? 15 : 55}
+                        className="mt-3 h-1.5"
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </FadeIn>
+            )}
 
             {/* Tabs */}
             <Tabs defaultValue="preview" className="space-y-4">
