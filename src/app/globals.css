@@ -1,26 +1,196 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+
+/* ═══════════════════════════════════════════════════════════════
+   CROWE DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════ */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans-value);
+  --font-mono: var(--font-mono-value);
+
+  /* shadcn semantic mappings */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* ─── Crowe Brand Colors (extended palette) ─── */
+  --color-crowe-amber-bright: #FFD231;
+  --color-crowe-amber: #F5A800;
+  --color-crowe-amber-dark: #D7761D;
+  --color-crowe-indigo-bright: #003F9F;
+  --color-crowe-indigo: #002E62;
+  --color-crowe-indigo-dark: #011E41;
+  --color-crowe-teal-bright: #16D9BC;
+  --color-crowe-teal: #05AB8C;
+  --color-crowe-teal-dark: #0C7876;
+  --color-crowe-cyan-light: #8FE1FF;
+  --color-crowe-cyan: #54C0E8;
+  --color-crowe-cyan-dark: #007DA3;
+  --color-crowe-blue-light: #32A8FD;
+  --color-crowe-blue: #0075C9;
+  --color-crowe-blue-dark: #0050AD;
+  --color-crowe-violet-bright: #EA80FF;
+  --color-crowe-violet: #B14FC5;
+  --color-crowe-violet-dark: #612080;
+  --color-crowe-coral-bright: #FF526F;
+  --color-crowe-coral: #E5376B;
+  --color-crowe-coral-dark: #992A5C;
+  --color-tint-900: #333333;
+  --color-tint-700: #4F4F4F;
+  --color-tint-500: #828282;
+  --color-tint-300: #BDBDBD;
+  --color-tint-100: #E0E0E0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --radius: 0.5rem;
+
+  /* Font stacks */
+  --font-sans-value: 'Helvetica Now Text', 'Helvetica Neue', Arial, system-ui, sans-serif;
+  --font-mono-value: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', Consolas, monospace;
+
+  /* ─── shadcn semantic tokens (Crowe-branded) ─── */
+  --background: #FFFFFF;
+  --foreground: #333333;
+  --card: #FFFFFF;
+  --card-foreground: #333333;
+  --popover: #FFFFFF;
+  --popover-foreground: #333333;
+  --primary: #011E41;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F5A800;
+  --secondary-foreground: #011E41;
+  --muted: #F7F7F7;
+  --muted-foreground: #4F4F4F;
+  --accent: #F5A800;
+  --accent-foreground: #011E41;
+  --destructive: #E5376B;
+  --destructive-foreground: #FFFFFF;
+  --border: #E0E0E0;
+  --input: #E0E0E0;
+  --ring: #002E62;
+
+  /* Charts use secondary palette */
+  --chart-1: #05AB8C;
+  --chart-2: #0075C9;
+  --chart-3: #F5A800;
+  --chart-4: #B14FC5;
+  --chart-5: #E5376B;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #011E41;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F7F7F7;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #E0E0E0;
+  --sidebar-ring: #002E62;
+
+  /* ─── Motion tokens ─── */
+  --duration-instant: 75ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+
+  /* ─── Shadow tokens ─── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+}
+
+.dark {
+  --background: #011E41;
+  --foreground: #F7F7F7;
+  --card: #002E62;
+  --card-foreground: #F7F7F7;
+  --popover: #002E62;
+  --popover-foreground: #F7F7F7;
+  --primary: #F5A800;
+  --primary-foreground: #011E41;
+  --secondary: #002E62;
+  --secondary-foreground: #F7F7F7;
+  --muted: #002E62;
+  --muted-foreground: #BDBDBD;
+  --accent: #F5A800;
+  --accent-foreground: #011E41;
+  --destructive: #FF526F;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #F5A800;
+  --chart-1: #16D9BC;
+  --chart-2: #32A8FD;
+  --chart-3: #FFD231;
+  --chart-4: #EA80FF;
+  --chart-5: #FF526F;
+  --sidebar: #011E41;
+  --sidebar-foreground: #F7F7F7;
+  --sidebar-primary: #F5A800;
+  --sidebar-primary-foreground: #011E41;
+  --sidebar-accent: #002E62;
+  --sidebar-accent-foreground: #F7F7F7;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #F5A800;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── Reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
