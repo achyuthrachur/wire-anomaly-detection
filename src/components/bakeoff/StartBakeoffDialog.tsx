@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +36,6 @@ export function StartBakeoffDialog({
   modelId: providedModelId,
   onStarted,
 }: StartBakeoffDialogProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [modelName, setModelName] = useState('');
   const [labelColumn, setLabelColumn] = useState('IsAnomaly');
@@ -121,7 +119,6 @@ export function StartBakeoffDialog({
       const data = await res.json();
       setOpen(false);
       onStarted(data.bakeoffId);
-      router.push(`/bakeoff/${data.bakeoffId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start bake-off');
     } finally {

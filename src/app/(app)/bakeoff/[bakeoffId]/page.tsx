@@ -32,22 +32,29 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
   const [settingChampion, setSettingChampion] = useState(false);
   const pollStartRef = useRef<number>(Date.now());
 
-  const fetchBakeoff = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/bakeoff/${bakeoffId}`);
-      if (!res.ok) {
-        if (res.status === 404) throw new Error('Bake-off not found');
-        throw new Error('Failed to fetch bake-off');
+  const fetchBakeoff = useCallback(
+    async (retryCount = 0) => {
+      try {
+        const res = await fetch(`/api/bakeoff/${bakeoffId}`);
+        if (!res.ok) {
+          if (res.status === 404 && retryCount < 2) {
+            setTimeout(() => fetchBakeoff(retryCount + 1), 1500);
+            return;
+          }
+          if (res.status === 404) throw new Error('Bake-off not found');
+          throw new Error('Failed to fetch bake-off');
+        }
+        const data: BakeoffWithCandidates = await res.json();
+        setBakeoff(data);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load bake-off');
+      } finally {
+        setLoading(false);
       }
-      const data: BakeoffWithCandidates = await res.json();
-      setBakeoff(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load bake-off');
-    } finally {
-      setLoading(false);
-    }
-  }, [bakeoffId]);
+    },
+    [bakeoffId]
+  );
 
   // Initial fetch
   useEffect(() => {

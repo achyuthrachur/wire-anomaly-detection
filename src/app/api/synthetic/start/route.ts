@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
 
         // Infer schema from a small sample
         const trainingRows = trainingResult.csv.split('\n');
-        const trainingHeaders = trainingRows[0].split(',');
+        const trainingHeaders = trainingRows[0].split(',').map((h) => h.trim());
         const trainingSample = trainingRows.slice(1, 51).map((line) => {
           const values = line.split(',');
           const row: Record<string, string> = {};
           trainingHeaders.forEach((h, i) => {
-            row[h] = values[i] ?? '';
+            row[h] = (values[i] ?? '').trim();
           });
           return row;
         });
@@ -96,12 +96,12 @@ export async function POST(request: NextRequest) {
         );
 
         const scoringRows = scoringResult.csv.split('\n');
-        const scoringHeaders = scoringRows[0].split(',');
+        const scoringHeaders = scoringRows[0].split(',').map((h) => h.trim());
         const scoringSample = scoringRows.slice(1, 51).map((line) => {
           const values = line.split(',');
           const row: Record<string, string> = {};
           scoringHeaders.forEach((h, i) => {
-            row[h] = values[i] ?? '';
+            row[h] = (values[i] ?? '').trim();
           });
           return row;
         });
