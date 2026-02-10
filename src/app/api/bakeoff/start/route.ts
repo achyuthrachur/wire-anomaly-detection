@@ -80,7 +80,11 @@ export async function POST(request: NextRequest) {
 
     // 2. Build feature matrix
     const schema = dataset.schema_json;
-    const { X, y, featureNames } = buildFeatureMatrix(parsedFile.rows, schema, labelColumn);
+    const { X, y, featureNames, normContext } = buildFeatureMatrix(
+      parsedFile.rows,
+      schema,
+      labelColumn
+    );
 
     if (X.length === 0 || featureNames.length === 0) {
       await updateBakeoffStatus(bakeoff.id, 'failed', {
@@ -108,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Upload feature matrix to blob for train-candidate steps
-    const featuresPayload = JSON.stringify({ X, y, featureNames });
+    const featuresPayload = JSON.stringify({ X, y, featureNames, normContext });
     const featuresBlobUrl = await uploadDatasetFile(
       `bakeoff/${bakeoff.id}/features.json`,
       Buffer.from(featuresPayload)

@@ -80,6 +80,7 @@ export async function POST(
       X: number[][];
       y: number[];
       featureNames: string[];
+      normContext?: import('@/lib/ml/types').NormalizationContext;
     };
 
     const config = candidateConfigs[candidateIndex];
@@ -95,10 +96,18 @@ export async function POST(
       reviewRate
     );
 
+    // Embed normContext into the serialized artifact so scoring can reuse training-time stats
+    let finalArtifact = result.serializedArtifact;
+    if (featuresData.normContext) {
+      const artifactObj = JSON.parse(result.serializedArtifact) as Record<string, unknown>;
+      artifactObj.normContext = featuresData.normContext;
+      finalArtifact = JSON.stringify(artifactObj);
+    }
+
     // Upload artifact to blob
     const artifactBlobUrl = await uploadDatasetFile(
       `models/${bakeoffId}/${config.algorithm}.json`,
-      Buffer.from(result.serializedArtifact)
+      Buffer.from(finalArtifact)
     );
 
     // Insert model version

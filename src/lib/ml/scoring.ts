@@ -67,10 +67,46 @@ export async function runScoringPipeline(
   const labelColumn = findLabelColumn(parsed.headers);
   const schema = dataset.schema_json;
   const featureResult = buildFeatureMatrix(parsed.rows, schema, labelColumn, normContext);
-  const { X, featureNames } = featureResult;
+  const scoringFeatureNames = featureResult.featureNames;
 
-  if (X.length === 0 || featureNames.length === 0) {
+  if (featureResult.X.length === 0 || scoringFeatureNames.length === 0) {
     throw new Error('Feature matrix is empty — check dataset columns');
+  }
+
+  // ---- 5b. Align scoring features to training feature order ----
+  // The model uses feature indices from training. If the scoring dataset has
+  // a different schema (e.g. column type differences), the feature columns
+  // may be in a different order or have different names. We must reindex
+  // scoring features to match the training feature names stored in the artifact.
+  const trainingFeatureNames =
+    (artifactObj.featureNames as string[] | undefined) ?? scoringFeatureNames;
+  let X: number[][];
+  let featureNames: string[];
+
+  if (
+    trainingFeatureNames.length === scoringFeatureNames.length &&
+    trainingFeatureNames.every((n, i) => n === scoringFeatureNames[i])
+  ) {
+    // Features already aligned — no reindexing needed
+    X = featureResult.X;
+    featureNames = scoringFeatureNames;
+  } else {
+    // Build lookup: scoring feature name → index
+    const scoringIdx = new Map<string, number>();
+    scoringFeatureNames.forEach((name, i) => scoringIdx.set(name, i));
+
+    // For each training feature, find corresponding scoring column (or fill with 0)
+    const nSamples = featureResult.X.length;
+    featureNames = trainingFeatureNames;
+    X = new Array(nSamples);
+
+    for (let i = 0; i < nSamples; i++) {
+      X[i] = new Array(trainingFeatureNames.length);
+      for (let j = 0; j < trainingFeatureNames.length; j++) {
+        const srcIdx = scoringIdx.get(trainingFeatureNames[j]);
+        X[i][j] = srcIdx !== undefined ? featureResult.X[i][srcIdx] : 0;
+      }
+    }
   }
 
   // ---- 6. Predict scores for all rows ----

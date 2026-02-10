@@ -15,7 +15,17 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Upload, List, Info, Database, Box, FlaskConical, Wand2, Trash2 } from 'lucide-react';
+import {
+  Upload,
+  List,
+  Info,
+  Database,
+  Box,
+  FlaskConical,
+  Wand2,
+  Trash2,
+  BookOpen,
+} from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/synthetic', label: 'Synthetic', icon: Wand2 },
@@ -24,6 +34,7 @@ const NAV_ITEMS = [
   { href: '/models', label: 'Models', icon: Box },
   { href: '/runs', label: 'Runs', icon: List },
   { href: '/dashboard', label: 'Dashboard', icon: Info },
+  { href: '/methodology', label: 'How It Works', icon: BookOpen },
 ];
 
 export function Navbar() {

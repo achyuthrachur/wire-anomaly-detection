@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { renderMarkdownBlock } from '@/lib/utils/markdown-light';
 
 interface NarrativePanelProps {
   narrativeShort: string;
@@ -36,25 +37,7 @@ export function NarrativePanel({ narrativeShort, narrativeLong }: NarrativePanel
 
                 {expanded && (
                   <div className="bg-muted/50 text-foreground rounded-lg p-4 text-sm leading-relaxed">
-                    {narrativeLong.split('\n').map((line, i) => {
-                      const trimmed = line.trim();
-                      if (trimmed.startsWith('- ')) {
-                        return (
-                          <div key={i} className="mb-1 ml-4 flex gap-2">
-                            <span className="text-crowe-amber-dark shrink-0">&bull;</span>
-                            <span>{trimmed.slice(2)}</span>
-                          </div>
-                        );
-                      }
-                      if (trimmed === '') {
-                        return <div key={i} className="h-2" />;
-                      }
-                      return (
-                        <p key={i} className="mb-1">
-                          {trimmed}
-                        </p>
-                      );
-                    })}
+                    {renderMarkdownBlock(narrativeLong)}
                   </div>
                 )}
               </>

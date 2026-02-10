@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { MetricsBar } from '@/components/models/MetricsBar';
 import { Crown, ChevronDown, ChevronUp, Trophy } from 'lucide-react';
 import type { ModelVersion } from '@/lib/db/types';
+import { renderMarkdownBlock } from '@/lib/utils/markdown-light';
 
 interface ChampionRevealCardProps {
   champion: ModelVersion;
@@ -123,25 +124,7 @@ export function ChampionRevealCard({
               </button>
               {showDetails && (
                 <div className="bg-muted/50 text-foreground mt-3 rounded-lg p-4 text-sm leading-relaxed">
-                  {narrativeLong.split('\n').map((line, i) => {
-                    const trimmed = line.trim();
-                    if (trimmed.startsWith('- ')) {
-                      return (
-                        <div key={i} className="ml-4 flex gap-2">
-                          <span className="text-crowe-amber-dark shrink-0">&bull;</span>
-                          <span>{trimmed.slice(2)}</span>
-                        </div>
-                      );
-                    }
-                    if (trimmed === '') {
-                      return <div key={i} className="h-2" />;
-                    }
-                    return (
-                      <p key={i} className="mb-1">
-                        {trimmed}
-                      </p>
-                    );
-                  })}
+                  {renderMarkdownBlock(narrativeLong)}
                 </div>
               )}
             </div>

@@ -184,7 +184,7 @@ export async function runBakeoff(
 
   // ---- 2. Build feature matrix ----
   const schema = dataset.schema_json;
-  const { X, y, featureNames } = buildFeatureMatrix(parsed.rows, schema, labelColumn);
+  const { X, y, featureNames, normContext } = buildFeatureMatrix(parsed.rows, schema, labelColumn);
 
   if (X.length === 0 || featureNames.length === 0) {
     throw new Error('Feature matrix is empty — check that the dataset has usable columns');
@@ -219,8 +219,11 @@ export async function runBakeoff(
       // ---- 5. Compute permutation importance ----
       const importance = computePermutationImportance(model, X, y, featureNames);
 
-      // ---- 6. Serialize model artifact ----
-      const serializedArtifact = model.serialize();
+      // ---- 6. Serialize model artifact (embed normContext for scoring) ----
+      const rawArtifact = model.serialize();
+      const artifactObj = JSON.parse(rawArtifact) as Record<string, unknown>;
+      artifactObj.normContext = normContext;
+      const serializedArtifact = JSON.stringify(artifactObj);
 
       candidateResults.push({
         algorithm: config.algorithm,
