@@ -23,8 +23,11 @@ interface RunDetailProps {
 }
 
 export function RunDetail({ run }: RunDetailProps) {
-  const validation = run.validation_json as ValidationResult | null;
-  const profiling = run.profiling_json as ProfilingResult | null;
+  const rawValidation = run.validation_json as ValidationResult | null;
+  const rawProfiling = run.profiling_json as ProfilingResult | null;
+  // DB default is '{}' (empty object) — treat as null if missing required fields
+  const validation = rawValidation?.requiredColumns ? rawValidation : null;
+  const profiling = rawProfiling?.rowCount != null ? rawProfiling : null;
   const summary = (run.summary_json ?? null) as ScoringsSummary | null;
 
   const defaultTab = run.status === 'scored' ? 'scoring-results' : 'summary';

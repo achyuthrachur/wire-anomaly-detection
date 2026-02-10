@@ -132,14 +132,18 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
               </TabsContent>
 
               <TabsContent value="validation">
-                {latestRun?.validation_json && (
+                {latestRun?.validation_json?.requiredColumns ? (
                   <ValidationPanel validation={latestRun.validation_json} />
+                ) : (
+                  <p className="text-muted-foreground text-sm">Validation data not available.</p>
                 )}
               </TabsContent>
 
               <TabsContent value="profiling">
-                {latestRun?.profiling_json && (
+                {latestRun?.profiling_json?.rowCount != null ? (
                   <ProfilingCards profiling={latestRun.profiling_json} />
+                ) : (
+                  <p className="text-muted-foreground text-sm">Profiling data not available.</p>
                 )}
               </TabsContent>
             </Tabs>
