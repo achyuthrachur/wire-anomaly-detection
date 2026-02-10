@@ -343,7 +343,7 @@ export interface SyntheticJob {
 
 export interface SyntheticConfig {
   seed: number;
-  training: {
+  training?: {
     nRows: number;
     dateStart: string;
     dateEnd: string;
@@ -389,14 +389,17 @@ export const StartScoringRequestSchema = z.object({
 });
 
 export const StartSyntheticRequestSchema = z.object({
+  mode: z.enum(['both', 'scoring_only']).optional().default('both'),
   config: z.object({
     seed: z.number().int(),
-    training: z.object({
-      nRows: z.number().int().min(100).max(500000),
-      dateStart: z.string(),
-      dateEnd: z.string(),
-      anomalyRate: z.number().min(0).max(1),
-    }),
+    training: z
+      .object({
+        nRows: z.number().int().min(100).max(500000),
+        dateStart: z.string(),
+        dateEnd: z.string(),
+        anomalyRate: z.number().min(0).max(1),
+      })
+      .optional(),
     scoring: z.object({
       nRows: z.number().int().min(100).max(500000),
       dateStart: z.string(),

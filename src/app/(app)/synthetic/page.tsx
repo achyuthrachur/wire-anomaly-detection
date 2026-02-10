@@ -28,6 +28,7 @@ import {
 // ---------------------------------------------------------------------------
 
 interface FormState {
+  mode: 'both' | 'scoring_only';
   seed: number;
   nRowsTraining: number;
   nRowsScoring: number;
@@ -62,6 +63,7 @@ function defaultDates() {
 }
 
 const INITIAL_STATE: FormState = {
+  mode: 'both',
   seed: 1337,
   nRowsTraining: 20_000,
   nRowsScoring: 6_000,
@@ -131,12 +133,16 @@ export default function SyntheticWizardPage() {
   const buildConfig = useCallback(() => {
     return {
       seed: form.seed,
-      training: {
-        nRows: form.nRowsTraining,
-        dateStart: dates.trainingStart,
-        dateEnd: dates.trainingEnd,
-        anomalyRate: form.anomalyRateTraining,
-      },
+      ...(form.mode === 'both'
+        ? {
+            training: {
+              nRows: form.nRowsTraining,
+              dateStart: dates.trainingStart,
+              dateEnd: dates.trainingEnd,
+              anomalyRate: form.anomalyRateTraining,
+            },
+          }
+        : {}),
       scoring: {
         nRows: form.nRowsScoring,
         dateStart: dates.scoringStart,
@@ -166,7 +172,7 @@ export default function SyntheticWizardPage() {
       const res = await fetch('/api/synthetic/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: buildConfig() }),
+        body: JSON.stringify({ config: buildConfig(), mode: form.mode }),
       });
 
       if (!res.ok) {
@@ -181,7 +187,7 @@ export default function SyntheticWizardPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [buildConfig, router]);
+  }, [buildConfig, form.mode, router]);
 
   // Track which sections have been "visited" (for the rail checkmarks)
   const sectionIndex = SECTIONS.findIndex((s) => s.id === activeSection);
@@ -246,6 +252,43 @@ export default function SyntheticWizardPage() {
         {/* Right: Form Sections                                               */}
         {/* ----------------------------------------------------------------- */}
         <div className="min-w-0 flex-1 space-y-6">
+          {/* ─── Mode Toggle ─── */}
+          <FadeIn delay={80}>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Generation Mode</Label>
+              <div className="bg-muted/50 flex gap-2 rounded-lg border p-1">
+                <button
+                  onClick={() => updateField('mode', 'both')}
+                  className={cn(
+                    'rounded-md px-4 py-2 text-sm font-medium transition-all',
+                    form.mode === 'both'
+                      ? 'bg-crowe-indigo-dark text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Training + Scoring
+                </button>
+                <button
+                  onClick={() => updateField('mode', 'scoring_only')}
+                  className={cn(
+                    'rounded-md px-4 py-2 text-sm font-medium transition-all',
+                    form.mode === 'scoring_only'
+                      ? 'bg-crowe-indigo-dark text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Scoring Only
+                </button>
+              </div>
+              {form.mode === 'scoring_only' && (
+                <p className="text-muted-foreground text-xs">
+                  Only a scoring dataset will be generated. Use this when you already have a trained
+                  model.
+                </p>
+              )}
+            </div>
+          </FadeIn>
+
           {/* ─── Section 1: Population & Volume ─── */}
           <FadeIn delay={100}>
             <Card
@@ -273,12 +316,14 @@ export default function SyntheticWizardPage() {
                     onChange={(v) => handleNumericInput('seed', v)}
                     hint="Random seed for reproducibility"
                   />
-                  <NumberField
-                    label="Training Rows"
-                    value={form.nRowsTraining}
-                    onChange={(v) => handleNumericInput('nRowsTraining', v)}
-                    hint="Number of wire records for training"
-                  />
+                  {form.mode === 'both' && (
+                    <NumberField
+                      label="Training Rows"
+                      value={form.nRowsTraining}
+                      onChange={(v) => handleNumericInput('nRowsTraining', v)}
+                      hint="Number of wire records for training"
+                    />
+                  )}
                   <NumberField
                     label="Scoring Rows"
                     value={form.nRowsScoring}
@@ -309,13 +354,15 @@ export default function SyntheticWizardPage() {
                     onChange={(v) => handleNumericInput('beneficiaries', v)}
                     hint="Unique beneficiary accounts"
                   />
-                  <NumberField
-                    label="Training Anomaly Rate"
-                    value={form.anomalyRateTraining}
-                    onChange={(v) => handleNumericInput('anomalyRateTraining', v)}
-                    hint="Fraction of anomalous rows (training)"
-                    step="0.001"
-                  />
+                  {form.mode === 'both' && (
+                    <NumberField
+                      label="Training Anomaly Rate"
+                      value={form.anomalyRateTraining}
+                      onChange={(v) => handleNumericInput('anomalyRateTraining', v)}
+                      hint="Fraction of anomalous rows (training)"
+                      step="0.001"
+                    />
+                  )}
                   <NumberField
                     label="Scoring Anomaly Rate"
                     value={form.anomalyRateScoring}
@@ -386,24 +433,31 @@ export default function SyntheticWizardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  <div className="bg-muted/50 space-y-3 rounded-lg border p-4">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="bg-crowe-indigo-dark/5 text-crowe-indigo-dark border-crowe-indigo-dark/20 text-xs"
-                      >
-                        Training
-                      </Badge>
+                <div
+                  className={cn(
+                    'grid grid-cols-1 gap-5',
+                    form.mode === 'both' ? 'sm:grid-cols-2' : ''
+                  )}
+                >
+                  {form.mode === 'both' && (
+                    <div className="bg-muted/50 space-y-3 rounded-lg border p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="bg-crowe-indigo-dark/5 text-crowe-indigo-dark border-crowe-indigo-dark/20 text-xs"
+                        >
+                          Training
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <ReadonlyField label="Start Date" value={dates.trainingStart} />
+                        <ReadonlyField label="End Date" value={dates.trainingEnd} />
+                      </div>
+                      <p className="text-muted-foreground text-xs">
+                        90-day lookback window ({form.nRowsTraining.toLocaleString()} rows)
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <ReadonlyField label="Start Date" value={dates.trainingStart} />
-                      <ReadonlyField label="End Date" value={dates.trainingEnd} />
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      90-day lookback window ({form.nRowsTraining.toLocaleString()} rows)
-                    </p>
-                  </div>
+                  )}
                   <div className="bg-muted/50 space-y-3 rounded-lg border p-4">
                     <div className="flex items-center gap-2">
                       <Badge
@@ -471,16 +525,25 @@ export default function SyntheticWizardPage() {
                   Generate
                 </CardTitle>
                 <CardDescription>
-                  Review your configuration and generate both training and scoring datasets.
+                  {form.mode === 'scoring_only'
+                    ? 'Review your configuration and generate a scoring dataset.'
+                    : 'Review your configuration and generate both training and scoring datasets.'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 {/* Quick summary */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <SummaryChip
-                    label="Training"
-                    value={`${(form.nRowsTraining / 1000).toFixed(0)}K rows`}
-                  />
+                <div
+                  className={cn(
+                    'grid grid-cols-2 gap-3',
+                    form.mode === 'both' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
+                  )}
+                >
+                  {form.mode === 'both' && (
+                    <SummaryChip
+                      label="Training"
+                      value={`${(form.nRowsTraining / 1000).toFixed(0)}K rows`}
+                    />
+                  )}
                   <SummaryChip
                     label="Scoring"
                     value={`${(form.nRowsScoring / 1000).toFixed(0)}K rows`}
@@ -514,7 +577,9 @@ export default function SyntheticWizardPage() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      Generate Datasets
+                      {form.mode === 'scoring_only'
+                        ? 'Generate Scoring Dataset'
+                        : 'Generate Datasets'}
                     </>
                   )}
                 </Button>

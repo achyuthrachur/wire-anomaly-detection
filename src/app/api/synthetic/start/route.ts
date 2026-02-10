@@ -26,10 +26,11 @@ export async function POST(request: NextRequest) {
     }
 
     const config = parsed.data.config as SyntheticConfig;
+    const mode = parsed.data.mode ?? 'both';
 
     // Insert job record
     const job = await insertSyntheticJob(config);
-    log.info({ jobId: job.id }, 'Synthetic job queued');
+    log.info({ jobId: job.id, mode }, 'Synthetic job queued');
 
     const response = NextResponse.json({ jobId: job.id }, { status: 201 });
 
@@ -37,55 +38,59 @@ export async function POST(request: NextRequest) {
     after(async () => {
       try {
         await updateSyntheticJobStatus(job.id, 'running');
-        log.info({ jobId: job.id }, 'Synthetic job running');
+        log.info({ jobId: job.id, mode }, 'Synthetic job running');
 
-        // ---- Generate Training Dataset ----
-        const trainingResult = generateWireDataset(config, 'training', config.seed);
-        const trainingBuffer = Buffer.from(trainingResult.csv, 'utf-8');
-        const trainingFingerprint = crypto
-          .createHash('sha256')
-          .update(trainingBuffer)
-          .digest('hex');
+        // ---- Generate Training Dataset (only when mode is 'both') ----
+        let trainingDataset: { id: string } | null = null;
 
-        const trainingBlobUrl = await uploadDatasetFile(
-          `synthetic/training-${job.id}.csv`,
-          trainingBuffer
-        );
+        if (mode === 'both') {
+          const trainingResult = generateWireDataset(config, 'training', config.seed);
+          const trainingBuffer = Buffer.from(trainingResult.csv, 'utf-8');
+          const trainingFingerprint = crypto
+            .createHash('sha256')
+            .update(trainingBuffer)
+            .digest('hex');
 
-        // Infer schema from a small sample
-        const trainingRows = trainingResult.csv.split('\n');
-        const trainingHeaders = trainingRows[0].split(',').map((h) => h.trim());
-        const trainingSample = trainingRows.slice(1, 51).map((line) => {
-          const values = line.split(',');
-          const row: Record<string, string> = {};
-          trainingHeaders.forEach((h, i) => {
-            row[h] = (values[i] ?? '').trim();
+          const trainingBlobUrl = await uploadDatasetFile(
+            `synthetic/training-${job.id}.csv`,
+            trainingBuffer
+          );
+
+          // Infer schema from a small sample
+          const trainingRows = trainingResult.csv.split('\n');
+          const trainingHeaders = trainingRows[0].split(',').map((h) => h.trim());
+          const trainingSample = trainingRows.slice(1, 51).map((line) => {
+            const values = line.split(',');
+            const row: Record<string, string> = {};
+            trainingHeaders.forEach((h, i) => {
+              row[h] = (values[i] ?? '').trim();
+            });
+            return row;
           });
-          return row;
-        });
 
-        const trainingSchema = inferSchema({
-          headers: trainingHeaders,
-          rows: trainingSample,
-          totalRows: trainingResult.rowCount,
-        });
+          const trainingSchema = inferSchema({
+            headers: trainingHeaders,
+            rows: trainingSample,
+            totalRows: trainingResult.rowCount,
+          });
 
-        const trainingDataset = await insertDataset({
-          name: `Synthetic Training (seed=${config.seed})`,
-          source_format: 'csv',
-          blob_url: trainingBlobUrl,
-          schema_json: trainingSchema,
-          row_count: trainingResult.rowCount,
-          fingerprint: trainingFingerprint,
-          dataset_role: 'training',
-          generator_config_json: config as unknown as Record<string, unknown>,
-          label_present: true,
-        });
+          trainingDataset = await insertDataset({
+            name: `Synthetic Training (seed=${config.seed})`,
+            source_format: 'csv',
+            blob_url: trainingBlobUrl,
+            schema_json: trainingSchema,
+            row_count: trainingResult.rowCount,
+            fingerprint: trainingFingerprint,
+            dataset_role: 'training',
+            generator_config_json: config as unknown as Record<string, unknown>,
+            label_present: true,
+          });
 
-        log.info(
-          { jobId: job.id, datasetId: trainingDataset.id, rows: trainingResult.rowCount },
-          'Training dataset created'
-        );
+          log.info(
+            { jobId: job.id, datasetId: trainingDataset.id, rows: trainingResult.rowCount },
+            'Training dataset created'
+          );
+        }
 
         // ---- Generate Scoring Dataset ----
         const scoringResult = generateWireDataset(config, 'scoring', config.seed + 1000);
@@ -133,7 +138,7 @@ export async function POST(request: NextRequest) {
 
         // ---- Mark job completed ----
         await updateSyntheticJobStatus(job.id, 'completed', {
-          trainingDatasetId: trainingDataset.id,
+          ...(trainingDataset ? { trainingDatasetId: trainingDataset.id } : {}),
           scoringDatasetId: scoringDataset.id,
         });
 

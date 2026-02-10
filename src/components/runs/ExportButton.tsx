@@ -2,17 +2,23 @@
 
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
-import type { ValidationResult, ProfilingResult } from '@/lib/db/types';
+import type { ValidationResult, ProfilingResult, ScoringsSummary } from '@/lib/db/types';
 
 interface ExportButtonProps {
-  validation: ValidationResult;
-  profiling: ProfilingResult;
+  validation?: ValidationResult | null;
+  profiling?: ProfilingResult | null;
+  summary?: ScoringsSummary | null;
   datasetName: string;
 }
 
-export function ExportButton({ validation, profiling, datasetName }: ExportButtonProps) {
+export function ExportButton({ validation, profiling, summary, datasetName }: ExportButtonProps) {
   const handleExport = () => {
-    const data = JSON.stringify({ validation, profiling }, null, 2);
+    const exportData: Record<string, unknown> = {};
+    if (validation) exportData.validation = validation;
+    if (profiling) exportData.profiling = profiling;
+    if (summary) exportData.scoringSummary = summary;
+
+    const data = JSON.stringify(exportData, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

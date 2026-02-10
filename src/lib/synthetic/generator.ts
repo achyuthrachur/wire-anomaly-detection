@@ -67,6 +67,9 @@ export function generateWireDataset(
   const pools = generateEntityPools(rng, config.population);
 
   const roleConfig = role === 'training' ? config.training : config.scoring;
+  if (!roleConfig) {
+    throw new Error(`Missing "${role}" config in SyntheticConfig`);
+  }
   const nRows = roleConfig.nRows;
   const anomalyRate = roleConfig.anomalyRate;
   const dateStart = new Date(roleConfig.dateStart);
@@ -167,8 +170,14 @@ function generateNormalRow(
     config.distributions.amount.sigma
   );
   const wireDate = uniformDateSample(rng, dateStart, dateEnd);
-  // Set time to business hours (8-17)
-  wireDate.setHours(8 + Math.floor(rng() * 9), Math.floor(rng() * 60), Math.floor(rng() * 60));
+  // ~5% of normal rows have extended hours (7-8 or 17-19) to prevent perfect separator
+  let hour: number;
+  if (rng() < 0.05) {
+    hour = rng() < 0.5 ? 7 : 17 + Math.floor(rng() * 2); // 7, 17, or 18
+  } else {
+    hour = 8 + Math.floor(rng() * 9); // 8-16
+  }
+  wireDate.setHours(hour, Math.floor(rng() * 60), Math.floor(rng() * 60));
 
   const initiator = categoricalSample(rng, pools.initiators);
   let reviewer = categoricalSample(rng, pools.reviewers);
@@ -178,14 +187,18 @@ function generateNormalRow(
   }
 
   const sourceCountry = categoricalSample(rng, pools.lowRiskCountries);
-  const destCountry = categoricalSample(rng, pools.lowRiskCountries);
+  // ~10% of normal rows use high-risk country to prevent perfect separator
+  const destCountry =
+    rng() < 0.1
+      ? categoricalSample(rng, pools.highRiskCountries)
+      : categoricalSample(rng, pools.lowRiskCountries);
 
-  // Approval level based on amount
+  // Approval level based on amount (~3% of high-amount normals get "wrong" approval)
   let approvalLevel: string;
   if (amount > 100000) {
-    approvalLevel = 'Management';
+    approvalLevel = rng() < 0.03 ? 'Enhanced' : 'Management';
   } else if (amount > 10000) {
-    approvalLevel = 'Enhanced';
+    approvalLevel = rng() < 0.03 ? 'Standard' : 'Enhanced';
   } else {
     approvalLevel = 'Standard';
   }
@@ -201,13 +214,13 @@ function generateNormalRow(
     BeneficiaryID: categoricalSample(rng, pools.beneficiaries),
     DestinationCountry: destCountry,
     SourceCountry: sourceCountry,
-    CallbackVerified: 'true',
+    CallbackVerified: rng() < 0.02 ? 'false' : 'true',
     ApprovalLevel: approvalLevel,
     IsAnomaly: '0',
   };
 }
 
-// Pattern 1: High Amount (5-20x baseline)
+// Pattern 1: High Amount (10-50x baseline + mismatched approval + possible high-risk dest)
 function generateHighAmountAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -218,13 +231,19 @@ function generateHighAmountAnomaly(
 ): WireRow {
   const row = generateNormalRow(rng, pools, config, dateStart, dateEnd, idx);
   const baseAmount = parseFloat(row.Amount);
-  const multiplier = 5 + rng() * 15; // 5-20x
+  const multiplier = 10 + rng() * 40; // 10-50x
   row.Amount = (baseAmount * multiplier).toFixed(2);
+  // Mismatched approval for the extreme amount
+  row.ApprovalLevel = 'Standard';
+  // ~50% chance of high-risk destination
+  if (rng() < 0.5) {
+    row.DestinationCountry = categoricalSample(rng, pools.highRiskCountries);
+  }
   row.IsAnomaly = '1';
   return row;
 }
 
-// Pattern 2: Burst (same customer, 3-7 wires within 15-60 min)
+// Pattern 2: Burst — composite anomaly (moderate high amount + extended hours + no callback)
 function generateBurstAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -234,10 +253,15 @@ function generateBurstAnomaly(
   idx: number
 ): WireRow {
   const row = generateNormalRow(rng, pools, config, dateStart, dateEnd, idx);
-  // Reduce time spread to simulate burst
+  // Moderate high amount (3-8x)
+  const baseAmount = parseFloat(row.Amount);
+  row.Amount = (baseAmount * (3 + rng() * 5)).toFixed(2);
+  // Extended hours (17-22) — not deep night, but after business
   const burstDate = uniformDateSample(rng, dateStart, dateEnd);
-  burstDate.setHours(Math.floor(rng() * 24), Math.floor(rng() * 60), Math.floor(rng() * 60));
+  burstDate.setHours(17 + Math.floor(rng() * 5), Math.floor(rng() * 60), Math.floor(rng() * 60));
   row.WireDate = burstDate.toISOString();
+  // No callback verification
+  row.CallbackVerified = 'false';
   row.IsAnomaly = '1';
   return row;
 }
@@ -265,7 +289,7 @@ function generateOutOfHoursAnomaly(
   return row;
 }
 
-// Pattern 4: Risk Corridor + Callback Bypass
+// Pattern 4: Risk Corridor + Callback Bypass + above-average amount + mismatched approval
 function generateRiskCorridorAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -277,11 +301,16 @@ function generateRiskCorridorAnomaly(
   const row = generateNormalRow(rng, pools, config, dateStart, dateEnd, idx);
   row.DestinationCountry = categoricalSample(rng, pools.highRiskCountries);
   row.CallbackVerified = 'false';
+  // Above-average amount (2-5x)
+  const baseAmount = parseFloat(row.Amount);
+  row.Amount = (baseAmount * (2 + rng() * 3)).toFixed(2);
+  // Mismatched approval
+  row.ApprovalLevel = 'Standard';
   row.IsAnomaly = '1';
   return row;
 }
 
-// Pattern 5: SOD Exception (initiator == reviewer)
+// Pattern 5: SOD Exception (initiator == reviewer) + extended hours + moderate amount
 function generateSODAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -291,8 +320,15 @@ function generateSODAnomaly(
   idx: number
 ): WireRow {
   const row = generateNormalRow(rng, pools, config, dateStart, dateEnd, idx);
-  // Make reviewer a name derived from the initiator to simulate same person
+  // Same person as reviewer
   row.Reviewer = row.Initiator.replace('INI-', 'REV-');
+  // Extended hours (17-22)
+  const sodDate = uniformDateSample(rng, dateStart, dateEnd);
+  sodDate.setHours(17 + Math.floor(rng() * 5), Math.floor(rng() * 60), Math.floor(rng() * 60));
+  row.WireDate = sodDate.toISOString();
+  // Moderately high amount (2-4x)
+  const baseAmount = parseFloat(row.Amount);
+  row.Amount = (baseAmount * (2 + rng() * 2)).toFixed(2);
   row.IsAnomaly = '1';
   return row;
 }
