@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
           fingerprint: scoringFingerprint,
           dataset_role: 'scoring',
           generator_config_json: config as unknown as Record<string, unknown>,
-          label_present: true, // Labels exist but may be hidden in UI
+          label_present: false, // Scoring datasets have no labels (simulates real-world)
         });
 
         log.info(

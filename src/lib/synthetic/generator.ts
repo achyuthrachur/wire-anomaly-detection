@@ -143,12 +143,16 @@ export function generateWireDataset(
     rows[i].WireID = `W-${String(i + 1).padStart(7, '0')}`;
   }
 
-  const csv = Papa.unparse(rows, { columns: WIRE_COLUMNS, newline: '\n' });
+  // For scoring datasets, strip IsAnomaly to simulate real-world conditions
+  const outputColumns =
+    role === 'scoring' ? WIRE_COLUMNS.filter((c) => c !== 'IsAnomaly') : WIRE_COLUMNS;
+
+  const csv = Papa.unparse(rows, { columns: outputColumns, newline: '\n' });
 
   return {
     csv,
     rowCount: rows.length,
-    columns: WIRE_COLUMNS,
+    columns: outputColumns,
   };
 }
 
