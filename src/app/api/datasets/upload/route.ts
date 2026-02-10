@@ -9,7 +9,10 @@ import { createChildLogger } from '@/lib/logging/logger';
 const log = createChildLogger('upload');
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const ALLOWED_TYPES = ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+const ALLOWED_TYPES = [
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
 const ALLOWED_EXTENSIONS = ['.csv', '.xlsx'];
 
 export async function POST(request: NextRequest) {
@@ -32,13 +35,13 @@ export async function POST(request: NextRequest) {
 
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: `File too large. Maximum size: 50MB` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `File too large. Maximum size: 50MB` }, { status: 400 });
     }
 
-    const format = ext === '.csv' ? 'csv' : 'xlsx' as const;
+    // Optional role field for tagging uploads (e.g., 'scoring' from ScoreDataDialog)
+    const role = (formData.get('role') as string) || undefined;
+
+    const format = ext === '.csv' ? 'csv' : ('xlsx' as const);
     const buffer = Buffer.from(await file.arrayBuffer());
 
     log.info({ filename: file.name, size: file.size, format }, 'Processing upload');
@@ -53,11 +56,7 @@ export async function POST(request: NextRequest) {
     const schema = inferSchema(parsed);
 
     // 4. Compute fingerprint for dedup
-    const fingerprint = computeFingerprint(
-      JSON.stringify(schema),
-      file.size,
-      parsed.totalRows,
-    );
+    const fingerprint = computeFingerprint(JSON.stringify(schema), file.size, parsed.totalRows);
 
     // 5. Check for duplicates
     const existing = await findDatasetByFingerprint(fingerprint);
@@ -82,6 +81,7 @@ export async function POST(request: NextRequest) {
       schema_json: schema,
       row_count: parsed.totalRows,
       fingerprint,
+      dataset_role: (role as 'uploaded' | 'training' | 'scoring') || 'uploaded',
     });
 
     // 7. Create run

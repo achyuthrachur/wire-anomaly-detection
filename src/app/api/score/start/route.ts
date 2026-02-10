@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
 import { StartScoringRequestSchema } from '@/lib/db/types';
+
+export const maxDuration = 55;
 import {
   getDatasetById,
   getChampionVersionByModelId,
@@ -63,54 +64,54 @@ export async function POST(request: NextRequest) {
 
     log.info({ runId: run.id, datasetId, modelVersionId, reviewRate }, 'Scoring run started');
 
-    const response = NextResponse.json({ runId: run.id }, { status: 201 });
+    // Run scoring pipeline synchronously (same pattern as bake-off fix)
+    try {
+      const result = await runScoringPipeline(
+        datasetId,
+        modelVersionId!,
+        reviewRate,
+        threshold,
+        200
+      );
 
-    // Run scoring pipeline in background
-    after(async () => {
-      try {
-        const result = await runScoringPipeline(
-          datasetId,
-          modelVersionId!,
-          reviewRate,
-          threshold,
-          200
-        );
+      // Upload scored CSV to Blob
+      const outputsBlobUrl = await uploadDatasetFile(
+        `scoring/${run.id}/scored-output.csv`,
+        result.scoredCsvBuffer
+      );
 
-        // Upload scored CSV to Blob
-        const outputsBlobUrl = await uploadDatasetFile(
-          `scoring/${run.id}/scored-output.csv`,
-          result.scoredCsvBuffer
-        );
+      // Insert findings into database
+      const findingsWithRunId = result.findings.map((f) => ({
+        ...f,
+        run_id: run.id,
+      }));
+      await insertFindingsBatch(findingsWithRunId);
 
-        // Insert findings into database
-        const findingsWithRunId = result.findings.map((f) => ({
-          ...f,
-          run_id: run.id,
-        }));
-        await insertFindingsBatch(findingsWithRunId);
+      // Update run with summary
+      await updateRunScoring(run.id, 'scored', modelVersionId!, outputsBlobUrl, result.summary);
 
-        // Update run with summary
-        await updateRunScoring(run.id, 'scored', modelVersionId!, outputsBlobUrl, result.summary);
+      log.info(
+        {
+          runId: run.id,
+          flaggedCount: result.summary.flaggedCount,
+          findingsStored: result.findings.length,
+        },
+        'Scoring run completed'
+      );
 
-        log.info(
-          {
-            runId: run.id,
-            flaggedCount: result.summary.flaggedCount,
-            findingsStored: result.findings.length,
-          },
-          'Scoring run completed'
-        );
-      } catch (error) {
-        log.error({ runId: run.id, error }, 'Scoring run failed');
-        await updateRunScoring(run.id, 'failed', modelVersionId!, undefined, {
-          reviewRate,
-          rowCount: 0,
-          flaggedCount: 0,
-        });
-      }
-    });
-
-    return response;
+      return NextResponse.json({ runId: run.id }, { status: 201 });
+    } catch (error) {
+      log.error({ runId: run.id, error }, 'Scoring run failed');
+      await updateRunScoring(run.id, 'failed', modelVersionId!, undefined, {
+        reviewRate,
+        rowCount: 0,
+        flaggedCount: 0,
+      });
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Scoring pipeline failed' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     log.error({ error }, 'Failed to start scoring');
     return NextResponse.json(

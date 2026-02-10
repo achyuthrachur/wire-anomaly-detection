@@ -23,7 +23,7 @@ import { getDatasetById } from '@/lib/db/queries';
 // Algorithm dispatcher
 // ---------------------------------------------------------------------------
 
-function trainAlgorithm(
+export function trainAlgorithm(
   algorithm: string,
   X: number[][],
   y: number[],
@@ -96,6 +96,64 @@ function trainAlgorithm(
 
     default:
       throw new Error(`Unknown algorithm: ${algorithm}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Train a single candidate — used by the sequential /train-candidate API
+// ---------------------------------------------------------------------------
+
+export interface SingleCandidateResult {
+  algorithm: string;
+  hyperparams: Record<string, unknown>;
+  metrics: import('./types').MetricsResult;
+  importance: Record<string, number>;
+  serializedArtifact: string;
+  failed: boolean;
+}
+
+export function trainSingleCandidate(
+  config: CandidateConfig,
+  X: number[][],
+  y: number[],
+  featureNames: string[],
+  reviewRate: number
+): SingleCandidateResult {
+  try {
+    const model = trainAlgorithm(config.algorithm, X, y, config.hyperparams ?? {}, featureNames);
+    const scores = model.predictBatch(X);
+    const metrics = computeAllMetrics(y, scores, reviewRate, config.algorithm);
+    const importance = computePermutationImportance(model, X, y, featureNames);
+    const serializedArtifact = model.serialize();
+
+    return {
+      algorithm: config.algorithm,
+      hyperparams: config.hyperparams ?? {},
+      metrics,
+      importance,
+      serializedArtifact,
+      failed: false,
+    };
+  } catch (err) {
+    console.error(
+      `[ML Runner] Candidate ${config.algorithm} failed:`,
+      err instanceof Error ? err.message : err
+    );
+    return {
+      algorithm: config.algorithm,
+      hyperparams: config.hyperparams ?? {},
+      metrics: {
+        prAuc: 0,
+        recallAtReviewRate: 0,
+        precisionAtReviewRate: 0,
+        f1: 0,
+        stability: 0,
+        explainability: 0,
+      },
+      importance: Object.fromEntries(featureNames.map((n) => [n, 0])),
+      serializedArtifact: JSON.stringify({ algorithm: config.algorithm, error: 'training_failed' }),
+      failed: true,
+    };
   }
 }
 

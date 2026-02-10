@@ -18,11 +18,11 @@ import { cn } from '@/lib/utils';
 import { Upload, List, Info, Database, Box, FlaskConical, Wand2, Trash2 } from 'lucide-react';
 
 const NAV_ITEMS = [
+  { href: '/synthetic', label: 'Synthetic', icon: Wand2 },
   { href: '/upload', label: 'Upload', icon: Upload },
-  { href: '/runs', label: 'Runs', icon: List },
   { href: '/datasets', label: 'Datasets', icon: Database },
   { href: '/models', label: 'Models', icon: Box },
-  { href: '/synthetic', label: 'Synthetic', icon: Wand2 },
+  { href: '/runs', label: 'Runs', icon: List },
   { href: '/dashboard', label: 'Dashboard', icon: Info },
 ];
 

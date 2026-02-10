@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Search,
   BarChart3,
+  Download,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatNumber, formatDate } from '@/lib/utils/index';
@@ -67,6 +68,7 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   // Fetch run summary
   useEffect(() => {
@@ -103,6 +105,48 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
     fetchFindings();
   }, [fetchFindings]);
 
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      // Paginate through all findings
+      const allRows: FindingRow[] = [];
+      let exportOffset = 0;
+      const batchSize = 200;
+      while (true) {
+        const res = await fetch(
+          `/api/runs/${runId}/findings?offset=${exportOffset}&limit=${batchSize}`
+        );
+        if (!res.ok) break;
+        const data = await res.json();
+        const batch: FindingRow[] = data.findings ?? [];
+        allRows.push(...batch);
+        if (batch.length < batchSize) break;
+        exportOffset += batchSize;
+      }
+
+      // Build CSV
+      const header = 'Rank,Wire ID,Score,Predicted Label,Reason Codes\n';
+      const rows = allRows.map((f) => {
+        const reasons = (f.reasonCodes ?? []).map((r) => r.code).join('; ');
+        return `${f.rank},"${f.wireId}",${f.score.toFixed(6)},${f.predictedLabel},"${reasons}"`;
+      });
+      const csv = header + rows.join('\n');
+
+      // Trigger download
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `findings-${runId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Best effort
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const filteredFindings = searchTerm
     ? findings.filter((f) => f.wireId.toLowerCase().includes(searchTerm.toLowerCase()))
     : findings;
@@ -131,12 +175,23 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
               Flagged wire transfers ranked by anomaly score
             </p>
           </div>
-          <Link href={`/runs/${runId}/results`}>
-            <Button variant="outline" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              View Performance Report
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleExportCsv}
+              disabled={exporting}
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? 'Exporting...' : 'Export Findings CSV'}
             </Button>
-          </Link>
+            <Link href={`/runs/${runId}/results`}>
+              <Button variant="outline" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                View Performance Report
+              </Button>
+            </Link>
+          </div>
         </div>
       </FadeIn>
 

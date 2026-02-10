@@ -1,13 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { Clock, Cpu, BarChart3, CheckCircle2, Loader2 } from 'lucide-react';
 import type { BakeoffStatus } from '@/lib/db/types';
 
+const ALGORITHM_LABELS: Record<string, string> = {
+  log_reg: 'Logistic Regression',
+  decision_tree: 'Decision Tree',
+  random_forest: 'Random Forest',
+  extra_trees: 'Extra Trees',
+  gradient_boosted: 'Gradient Boosted',
+};
+
 interface BakeoffProgressProps {
   status: BakeoffStatus;
+  candidatesDone?: number;
+  candidateCount?: number;
+  currentAlgorithm?: string;
 }
 
 const STEPS = [
@@ -22,12 +32,17 @@ const STEPS = [
   { key: 'completed', label: 'Completed', icon: CheckCircle2, description: 'Bake-off complete.' },
 ] as const;
 
-function getStepIndex(status: BakeoffStatus): number {
+function getStepIndex(
+  status: BakeoffStatus,
+  candidatesDone: number,
+  candidateCount: number
+): number {
   switch (status) {
     case 'queued':
       return 0;
     case 'running':
-      return 1;
+      // If all candidates are done, we're in the evaluating step
+      return candidatesDone >= candidateCount && candidateCount > 0 ? 2 : 1;
     case 'completed':
       return 3;
     case 'failed':
@@ -37,51 +52,50 @@ function getStepIndex(status: BakeoffStatus): number {
   }
 }
 
-function getProgressValue(status: BakeoffStatus, elapsed: number): number {
-  switch (status) {
-    case 'queued':
-      return Math.min(10, elapsed * 2);
-    case 'running':
-      // Simulate progress from 15% to 85% over time
-      return Math.min(85, 15 + elapsed * 0.5);
-    case 'completed':
-      return 100;
-    case 'failed':
-      return 0;
-    default:
-      return 0;
-  }
+function getProgressValue(
+  status: BakeoffStatus,
+  candidatesDone: number,
+  candidateCount: number
+): number {
+  if (status === 'completed') return 100;
+  if (status === 'failed') return 0;
+  if (status === 'queued') return 5;
+
+  // Running: map candidatesDone to 10%-90%, finalize takes remaining 10%
+  if (candidateCount === 0) return 10;
+  const trainingProgress = candidatesDone / candidateCount;
+  // 10% - 90% for training, 90% - 100% for finalize
+  return Math.round(10 + trainingProgress * 80);
 }
 
-export function BakeoffProgress({ status }: BakeoffProgressProps) {
-  const [elapsed, setElapsed] = useState(0);
-  const activeStepIndex = getStepIndex(status);
-  const progressValue = getProgressValue(status, elapsed);
+export function BakeoffProgress({
+  status,
+  candidatesDone = 0,
+  candidateCount = 0,
+  currentAlgorithm,
+}: BakeoffProgressProps) {
+  const activeStepIndex = getStepIndex(status, candidatesDone, candidateCount);
+  const progressValue = getProgressValue(status, candidatesDone, candidateCount);
 
-  useEffect(() => {
-    if (status === 'completed' || status === 'failed') return;
+  const algoLabel = currentAlgorithm
+    ? (ALGORITHM_LABELS[currentAlgorithm] ?? currentAlgorithm)
+    : null;
 
-    let seconds = 0;
-    const interval = setInterval(() => {
-      seconds += 1;
-      setElapsed(seconds);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [status]);
+  const statusLabel =
+    status === 'running' && candidatesDone < candidateCount && algoLabel
+      ? `Training ${algoLabel} (${candidatesDone + 1}/${candidateCount})...`
+      : status === 'running' && candidatesDone >= candidateCount
+        ? 'Finalizing results...'
+        : status === 'queued'
+          ? 'Building features...'
+          : 'Complete';
 
   return (
     <div className="space-y-6">
       {/* Progress bar */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            {status === 'running'
-              ? 'Training models...'
-              : status === 'queued'
-                ? 'Preparing...'
-                : 'Complete'}
-          </span>
+          <span className="text-muted-foreground">{statusLabel}</span>
           <span className="text-foreground font-medium tabular-nums">
             {Math.round(progressValue)}%
           </span>
@@ -137,7 +151,11 @@ export function BakeoffProgress({ status }: BakeoffProgressProps) {
                   {step.label}
                 </p>
                 {isActive && (
-                  <p className="text-muted-foreground mt-0.5 text-[10px]">{step.description}</p>
+                  <p className="text-muted-foreground mt-0.5 text-[10px]">
+                    {step.key === 'running' && candidatesDone < candidateCount
+                      ? `${candidatesDone}/${candidateCount} complete`
+                      : step.description}
+                  </p>
                 )}
               </div>
             </div>

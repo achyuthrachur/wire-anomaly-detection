@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
 import { StaggerChildren } from '@/components/motion/StaggerChildren';
 import { VersionCard } from '@/components/models/VersionCard';
+import { StartBakeoffDialog } from '@/components/bakeoff/StartBakeoffDialog';
+import { ScoreDataDialog } from '@/components/models/ScoreDataDialog';
 import { DetailSkeleton } from '@/components/skeletons/DetailSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +20,7 @@ import { formatDate } from '@/lib/utils/index';
 
 export default function ModelDetailPage({ params }: { params: Promise<{ modelId: string }> }) {
   const { modelId } = use(params);
+  const router = useRouter();
   const [model, setModel] = useState<Model | null>(null);
   const [versions, setVersions] = useState<ModelVersion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +68,10 @@ export default function ModelDetailPage({ params }: { params: Promise<{ modelId:
     } finally {
       setSettingChampion(false);
     }
+  }
+
+  function handleBakeoffStarted(bakeoffId: string) {
+    router.push(`/bakeoff/${bakeoffId}`);
   }
 
   const champion = versions.find((v) => v.is_champion);
@@ -151,6 +159,20 @@ export default function ModelDetailPage({ params }: { params: Promise<{ modelId:
                   <Badge variant="outline" className="ml-1">
                     {versions.length}
                   </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StartBakeoffDialog
+                    modelId={modelId}
+                    modelName={model.name}
+                    onStarted={handleBakeoffStarted}
+                  />
+                  {champion && (
+                    <ScoreDataDialog
+                      modelId={modelId}
+                      modelName={model.name}
+                      championVersionId={champion.id}
+                    />
+                  )}
                 </div>
               </div>
 

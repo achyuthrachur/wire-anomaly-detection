@@ -287,6 +287,21 @@ export const SetChampionRequestSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Stage 2: Bake-off progress (stored in error_json during sequential training)
+// ---------------------------------------------------------------------------
+
+export interface BakeoffProgress {
+  featuresBlobUrl: string;
+  candidateConfigs: Array<{ algorithm: string; hyperparams: Record<string, unknown> }>;
+  labelColumn: string;
+  reviewRate: number;
+}
+
+export const TrainCandidateRequestSchema = z.object({
+  candidateIndex: z.number().int().min(0),
+});
+
+// ---------------------------------------------------------------------------
 // Stage 3: Finding
 // ---------------------------------------------------------------------------
 

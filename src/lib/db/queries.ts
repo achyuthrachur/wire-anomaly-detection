@@ -346,6 +346,9 @@ export async function updateBakeoffStatus(
     sets.push(`error_json = $${idx}`);
     params.push(JSON.stringify(extra.errorJson));
     idx++;
+  } else if (status === 'completed') {
+    // Clear progress data stored in error_json during sequential training
+    sets.push(`error_json = NULL`);
   }
 
   params.push(id);

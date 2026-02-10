@@ -31,6 +31,8 @@ import {
   Eye,
   CheckCircle2,
   XCircle,
+  Download,
+  Printer,
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────────────────
@@ -75,6 +77,7 @@ interface RunData {
   status: string;
   summary_json: ScoringsSummary;
   model_version_id?: string;
+  outputs_blob_url?: string | null;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -269,12 +272,26 @@ export default function ResultsPage({ params }: { params: Promise<{ runId: strin
               )}
             </p>
           </div>
-          <Link href={`/runs/${runId}/findings`}>
-            <Button variant="outline" className="gap-2">
-              <Eye className="h-4 w-4" />
-              View All Findings
+          <div className="flex flex-wrap gap-2">
+            {run?.outputs_blob_url && (
+              <a href={run.outputs_blob_url} download>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  Download Scored CSV
+                </Button>
+              </a>
+            )}
+            <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+              <Printer className="h-4 w-4" />
+              Print Report
             </Button>
-          </Link>
+            <Link href={`/runs/${runId}/findings`}>
+              <Button variant="outline" className="gap-2">
+                <Eye className="h-4 w-4" />
+                View All Findings
+              </Button>
+            </Link>
+          </div>
         </div>
       </FadeIn>
 

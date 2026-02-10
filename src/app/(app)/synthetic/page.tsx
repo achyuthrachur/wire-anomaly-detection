@@ -63,8 +63,8 @@ function defaultDates() {
 
 const INITIAL_STATE: FormState = {
   seed: 1337,
-  nRowsTraining: 250_000,
-  nRowsScoring: 75_000,
+  nRowsTraining: 20_000,
+  nRowsScoring: 6_000,
   initiators: 250,
   reviewers: 120,
   customers: 12_000,

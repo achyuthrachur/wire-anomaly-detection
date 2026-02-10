@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { StartSyntheticRequestSchema } from '@/lib/db/types';
+
+export const maxDuration = 300; // Allow up to 5 min for synthetic generation (requires Vercel Pro)
 import type { SyntheticConfig } from '@/lib/db/types';
 import { insertSyntheticJob, updateSyntheticJobStatus, insertDataset } from '@/lib/db/queries';
 import { uploadDatasetFile } from '@/lib/blob/client';

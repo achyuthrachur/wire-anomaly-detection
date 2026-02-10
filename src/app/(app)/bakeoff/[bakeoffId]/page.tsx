@@ -12,17 +12,21 @@ import { DetailSkeleton } from '@/components/skeletons/DetailSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, AlertTriangle, FlaskConical, Database, Clock, XCircle } from 'lucide-react';
-import type { BakeoffWithCandidates, BakeoffStatus } from '@/lib/db/types';
+import {
+  ArrowLeft,
+  AlertTriangle,
+  FlaskConical,
+  Database,
+  Clock,
+  XCircle,
+  RotateCcw,
+} from 'lucide-react';
+import type {
+  BakeoffWithCandidates,
+  BakeoffStatus,
+  BakeoffProgress as BakeoffProgressType,
+} from '@/lib/db/types';
 import { formatDate } from '@/lib/utils/index';
-
-const FAST_POLL_MS = 1500;
-const SLOW_POLL_MS = 5000;
-const BACKOFF_THRESHOLD_MS = 30_000;
-
-function isPollingStatus(status: BakeoffStatus): boolean {
-  return status === 'queued' || status === 'running';
-}
 
 export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeoffId: string }> }) {
   const { bakeoffId } = use(params);
@@ -30,7 +34,14 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settingChampion, setSettingChampion] = useState(false);
-  const pollStartRef = useRef<number>(Date.now());
+
+  // Orchestration state
+  const [candidatesDone, setCandidatesDone] = useState(0);
+  const [candidateCount, setCandidateCount] = useState(0);
+  const [currentAlgorithm, setCurrentAlgorithm] = useState<string | undefined>(undefined);
+  const [orchestrating, setOrchestrating] = useState(false);
+  const [orchestrationError, setOrchestrationError] = useState<string | null>(null);
+  const abortRef = useRef(false);
 
   const fetchBakeoff = useCallback(
     async (retryCount = 0) => {
@@ -47,8 +58,10 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
         const data: BakeoffWithCandidates = await res.json();
         setBakeoff(data);
         setError(null);
+        return data;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load bake-off');
+        return null;
       } finally {
         setLoading(false);
       }
@@ -56,25 +69,114 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
     [bakeoffId]
   );
 
-  // Initial fetch
+  // Run the orchestration loop: train remaining candidates, then finalize
+  const runOrchestration = useCallback(
+    async (bakeoffData: BakeoffWithCandidates) => {
+      const progress = (bakeoffData.error_json as { progress?: BakeoffProgressType } | null)
+        ?.progress;
+      if (!progress) return;
+
+      const { candidateConfigs } = progress;
+      const totalCandidates = candidateConfigs.length;
+      let done = bakeoffData.candidate_version_ids.length;
+
+      setCandidateCount(totalCandidates);
+      setCandidatesDone(done);
+      setOrchestrating(true);
+      setOrchestrationError(null);
+
+      // Train remaining candidates
+      while (done < totalCandidates) {
+        if (abortRef.current) return;
+
+        const config = candidateConfigs[done];
+        setCurrentAlgorithm(config.algorithm);
+
+        try {
+          const res = await fetch(`/api/bakeoff/${bakeoffData.id}/train-candidate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidateIndex: done }),
+          });
+
+          if (!res.ok) {
+            const data = await res.json();
+            // 409 with candidatesDone means we're out of sync — resync
+            if (res.status === 409 && data.candidatesDone !== undefined) {
+              done = data.candidatesDone;
+              setCandidatesDone(done);
+              continue;
+            }
+            throw new Error(data.error || 'Failed to train candidate');
+          }
+
+          const result = await res.json();
+          done = result.candidatesDone;
+          setCandidatesDone(done);
+        } catch (err) {
+          setOrchestrationError(err instanceof Error ? err.message : 'Training failed');
+          setOrchestrating(false);
+          return;
+        }
+      }
+
+      if (abortRef.current) return;
+
+      // Finalize
+      setCurrentAlgorithm(undefined);
+      try {
+        const res = await fetch(`/api/bakeoff/${bakeoffData.id}/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to finalize bake-off');
+        }
+
+        // Refetch to get final state
+        await fetchBakeoff();
+      } catch (err) {
+        setOrchestrationError(err instanceof Error ? err.message : 'Finalization failed');
+      } finally {
+        setOrchestrating(false);
+      }
+    },
+    [bakeoffId, fetchBakeoff]
+  );
+
+  // Initial fetch + start orchestration if needed
   useEffect(() => {
-    fetchBakeoff();
-    pollStartRef.current = Date.now();
-  }, [fetchBakeoff]);
+    abortRef.current = false;
 
-  // Polling while queued/running
-  useEffect(() => {
-    if (!bakeoff || !isPollingStatus(bakeoff.status)) return;
+    async function init() {
+      const data = await fetchBakeoff();
+      if (!data) return;
 
-    const elapsed = Date.now() - pollStartRef.current;
-    const interval = elapsed > BACKOFF_THRESHOLD_MS ? SLOW_POLL_MS : FAST_POLL_MS;
+      // If bakeoff is running and has progress, start/resume orchestration
+      if (data.status === 'running' && data.error_json) {
+        const progress = (data.error_json as { progress?: BakeoffProgressType })?.progress;
+        if (progress) {
+          runOrchestration(data);
+        }
+      }
+    }
 
-    const timer = setTimeout(() => {
-      fetchBakeoff();
-    }, interval);
+    init();
 
-    return () => clearTimeout(timer);
-  }, [bakeoff, fetchBakeoff]);
+    return () => {
+      abortRef.current = true;
+    };
+  }, [fetchBakeoff, runOrchestration]);
+
+  async function handleRetry() {
+    setOrchestrationError(null);
+    const data = await fetchBakeoff();
+    if (data && data.status === 'running') {
+      runOrchestration(data);
+    }
+  }
 
   async function handleSetChampion(versionId: string) {
     if (!bakeoff) return;
@@ -89,7 +191,6 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
         const data = await res.json();
         throw new Error(data.error || 'Failed to set champion');
       }
-      // Refetch to get updated state
       await fetchBakeoff();
     } catch (err) {
       console.error('Failed to set champion:', err);
@@ -100,6 +201,12 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
 
   // Determine champion candidate
   const championCandidate = bakeoff?.candidates.find((c) => c.id === bakeoff.champion_version_id);
+
+  // Determine effective status for display
+  const displayStatus: BakeoffStatus =
+    orchestrating || (bakeoff?.status === 'running' && !orchestrationError)
+      ? 'running'
+      : (bakeoff?.status ?? 'queued');
 
   return (
     <PageContainer>
@@ -138,7 +245,7 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
               <div className="flex items-center gap-3">
                 <FlaskConical className="text-crowe-indigo h-6 w-6 shrink-0" />
                 <h1 className="text-foreground text-2xl font-semibold">Bake-off Results</h1>
-                <StatusBadge status={bakeoff.status} />
+                <StatusBadge status={displayStatus} />
               </div>
               <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-sm">
                 <span className="flex items-center gap-1.5">
@@ -168,8 +275,8 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
             </div>
           </FadeIn>
 
-          {/* Queued / Running State */}
-          {isPollingStatus(bakeoff.status) && (
+          {/* Running / Orchestrating State */}
+          {displayStatus === 'running' && !orchestrationError && (
             <FadeIn delay={100}>
               <Card>
                 <CardContent className="py-8">
@@ -179,19 +286,52 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
                         Training in progress...
                       </h2>
                       <p className="text-muted-foreground mt-1 text-sm">
-                        {bakeoff.candidates.length > 0
-                          ? `${bakeoff.candidates.length} candidates training`
+                        {candidateCount > 0
+                          ? `${candidatesDone} of ${candidateCount} algorithms trained`
                           : 'Preparing the training pipeline'}
                       </p>
                     </div>
-                    <BakeoffProgress status={bakeoff.status} />
+                    <BakeoffProgress
+                      status="running"
+                      candidatesDone={candidatesDone}
+                      candidateCount={candidateCount}
+                      currentAlgorithm={currentAlgorithm}
+                    />
                   </div>
                 </CardContent>
               </Card>
             </FadeIn>
           )}
 
-          {/* Failed State */}
+          {/* Orchestration Error State */}
+          {orchestrationError && bakeoff.status === 'running' && (
+            <FadeIn delay={100}>
+              <Card className="border-crowe-coral/30">
+                <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+                  <div className="bg-crowe-coral/10 flex h-12 w-12 items-center justify-center rounded-full">
+                    <XCircle className="text-crowe-coral h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-foreground font-semibold">Training Error</h2>
+                    <p className="text-muted-foreground mt-1 max-w-md text-sm">
+                      {orchestrationError}
+                    </p>
+                    {candidatesDone > 0 && (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {candidatesDone}/{candidateCount} candidates completed — progress is saved.
+                      </p>
+                    )}
+                  </div>
+                  <Button onClick={handleRetry} variant="outline" className="gap-2">
+                    <RotateCcw className="h-4 w-4" />
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
+            </FadeIn>
+          )}
+
+          {/* Failed State (from DB) */}
           {bakeoff.status === 'failed' && (
             <FadeIn delay={100}>
               <Card className="border-crowe-coral/30">
@@ -207,8 +347,8 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
                         : 'An unexpected error occurred during training. Please try again with different parameters.'}
                     </p>
                   </div>
-                  <Link href="/datasets">
-                    <Button variant="outline">Back to Datasets</Button>
+                  <Link href={`/models/${bakeoff.model_id}`}>
+                    <Button variant="outline">Back to Model</Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -257,6 +397,17 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
                   </div>
                 </FadeIn>
               )}
+
+              {/* Model Registry link */}
+              <FadeIn delay={400}>
+                <div className="flex justify-center pt-4">
+                  <Link href={`/models/${bakeoff.model_id}`}>
+                    <Button className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white">
+                      View in Model Registry
+                    </Button>
+                  </Link>
+                </div>
+              </FadeIn>
             </>
           )}
         </div>

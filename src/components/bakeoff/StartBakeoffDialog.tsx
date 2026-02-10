@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,12 +12,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { FlaskConical, AlertCircle } from 'lucide-react';
+import type { Dataset } from '@/lib/db/types';
 
 interface StartBakeoffDialogProps {
-  datasetId: string;
-  datasetName: string;
-  labelPresent: boolean;
-  modelId?: string;
+  modelId: string;
+  modelName: string;
   onStarted: (bakeoffId: string) => void;
 }
 
@@ -29,15 +28,10 @@ const ALGORITHMS = [
   { key: 'gradient_boosted', label: 'Gradient Boosted' },
 ] as const;
 
-export function StartBakeoffDialog({
-  datasetId,
-  datasetName,
-  labelPresent,
-  modelId: providedModelId,
-  onStarted,
-}: StartBakeoffDialogProps) {
+export function StartBakeoffDialog({ modelId, modelName, onStarted }: StartBakeoffDialogProps) {
   const [open, setOpen] = useState(false);
-  const [modelName, setModelName] = useState('');
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [labelColumn, setLabelColumn] = useState('IsAnomaly');
   const [reviewRate, setReviewRate] = useState('0.005');
   const [selectedAlgorithms, setSelectedAlgorithms] = useState<string[]>(
@@ -45,6 +39,31 @@ export function StartBakeoffDialog({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+
+  // Fetch training datasets with labels when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    setLoadingDatasets(true);
+    async function fetchDatasets() {
+      try {
+        const res = await fetch('/api/datasets/list?role=training');
+        if (res.ok) {
+          const data = await res.json();
+          const eligible = (data.datasets ?? []).filter((d: Dataset) => d.label_present);
+          setDatasets(eligible);
+          if (eligible.length > 0 && !selectedDatasetId) {
+            setSelectedDatasetId(eligible[0].id);
+          }
+        }
+      } catch {
+        // Non-critical
+      } finally {
+        setLoadingDatasets(false);
+      }
+    }
+    fetchDatasets();
+  }, [open, selectedDatasetId]);
 
   function toggleAlgorithm(key: string) {
     setSelectedAlgorithms((prev) =>
@@ -55,6 +74,11 @@ export function StartBakeoffDialog({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!selectedDatasetId) {
+      setError('Select a training dataset.');
+      return;
+    }
 
     if (selectedAlgorithms.length === 0) {
       setError('Select at least one algorithm.');
@@ -70,38 +94,12 @@ export function StartBakeoffDialog({
     setSubmitting(true);
 
     try {
-      // If no modelId provided, create a model first
-      let effectiveModelId = providedModelId;
-      if (!effectiveModelId) {
-        const trimmedName = modelName.trim();
-        if (!trimmedName) {
-          setError('Model name is required.');
-          setSubmitting(false);
-          return;
-        }
-
-        const createRes = await fetch('/api/models/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: trimmedName }),
-        });
-
-        if (!createRes.ok) {
-          const data = await createRes.json();
-          throw new Error(data.error || 'Failed to create model');
-        }
-
-        const createData = await createRes.json();
-        effectiveModelId = createData.modelId;
-      }
-
-      // Start the bake-off
       const res = await fetch('/api/bakeoff/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          datasetId,
-          modelId: effectiveModelId,
+          datasetId: selectedDatasetId,
+          modelId,
           labelColumn: labelColumn.trim(),
           reviewRate: rr,
           candidates: selectedAlgorithms.map((algorithm) => ({
@@ -129,15 +127,7 @@ export function StartBakeoffDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          disabled={!labelPresent}
-          className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white"
-          title={
-            !labelPresent
-              ? 'Labels are required to run a bake-off. Upload a dataset with a label column.'
-              : undefined
-          }
-        >
+        <Button className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white">
           <FlaskConical className="h-4 w-4" />
           Start Bake-off
         </Button>
@@ -146,32 +136,41 @@ export function StartBakeoffDialog({
         <DialogHeader>
           <DialogTitle>Start Model Bake-off</DialogTitle>
           <DialogDescription>
-            Train and compare multiple algorithms on{' '}
-            <span className="text-foreground font-medium">{datasetName}</span>.
+            Train and compare multiple algorithms for{' '}
+            <span className="text-foreground font-medium">{modelName}</span>.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Model selection */}
-          {!providedModelId && (
-            <div className="space-y-2">
-              <label htmlFor="bakeoff-model-name" className="text-foreground text-sm font-medium">
-                Model Name <span className="text-crowe-coral">*</span>
-              </label>
-              <input
-                id="bakeoff-model-name"
-                type="text"
-                required={!providedModelId}
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-                placeholder="e.g., Wire Fraud Detector v2"
-                className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              />
-              <p className="text-muted-foreground text-xs">
-                A new model will be created in the registry.
-              </p>
-            </div>
-          )}
+          {/* Dataset picker */}
+          <div className="space-y-2">
+            <label htmlFor="bakeoff-dataset" className="text-foreground text-sm font-medium">
+              Training Dataset <span className="text-crowe-coral">*</span>
+            </label>
+            {loadingDatasets ? (
+              <div className="text-muted-foreground text-sm">Loading datasets...</div>
+            ) : datasets.length === 0 ? (
+              <div className="bg-crowe-amber/5 border-crowe-amber/20 rounded-md border p-3 text-sm">
+                <p className="text-foreground font-medium">No training datasets available</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Upload a dataset with labels and set its role to &ldquo;training&rdquo; first.
+                </p>
+              </div>
+            ) : (
+              <select
+                id="bakeoff-dataset"
+                value={selectedDatasetId}
+                onChange={(e) => setSelectedDatasetId(e.target.value)}
+                className="border-input bg-background text-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {datasets.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({d.row_count.toLocaleString()} rows)
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {/* Label column */}
           <div className="space-y-2">
@@ -254,13 +253,13 @@ export function StartBakeoffDialog({
             </Button>
             <Button
               type="submit"
-              disabled={submitting || selectedAlgorithms.length === 0}
+              disabled={submitting || selectedAlgorithms.length === 0 || !selectedDatasetId}
               className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2 text-white"
             >
               {submitting ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Starting...
+                  Building features...
                 </>
               ) : (
                 <>
