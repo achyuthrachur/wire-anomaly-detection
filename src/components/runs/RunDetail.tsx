@@ -61,8 +61,8 @@ export function RunDetail({ run }: RunDetailProps) {
           {run.status === 'scored' && (
             <TabsTrigger value="scoring-results">Scoring Results</TabsTrigger>
           )}
-          <TabsTrigger value="validation">Validation</TabsTrigger>
-          <TabsTrigger value="profiling">Profiling</TabsTrigger>
+          {validation && <TabsTrigger value="validation">Validation</TabsTrigger>}
+          {profiling && <TabsTrigger value="profiling">Profiling</TabsTrigger>}
           <TabsTrigger value="json">Raw JSON</TabsTrigger>
         </TabsList>
 
@@ -76,21 +76,17 @@ export function RunDetail({ run }: RunDetailProps) {
           </TabsContent>
         )}
 
-        <TabsContent value="validation" className="mt-6">
-          {run.status !== 'created' && validation ? (
+        {validation && (
+          <TabsContent value="validation" className="mt-6">
             <ValidationPanel validation={validation} />
-          ) : (
-            <p className="text-muted-foreground text-sm">Validation has not been run yet.</p>
-          )}
-        </TabsContent>
+          </TabsContent>
+        )}
 
-        <TabsContent value="profiling" className="mt-6">
-          {run.status === 'validated' && profiling ? (
+        {profiling && (
+          <TabsContent value="profiling" className="mt-6">
             <ProfilingCards profiling={profiling} />
-          ) : (
-            <p className="text-muted-foreground text-sm">Profiling data not available.</p>
-          )}
-        </TabsContent>
+          </TabsContent>
+        )}
 
         <TabsContent value="json" className="mt-6">
           <RawJsonTab validation={validation} profiling={profiling} summary={summary} />

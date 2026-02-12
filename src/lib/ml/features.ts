@@ -204,6 +204,7 @@ export function buildFeatureMatrix(
     const dayOfWeek: number[] = [];
     const isWeekend: number[] = [];
     const isOutOfHours: number[] = [];
+    const isExtendedHours: number[] = [];
 
     for (const row of rows) {
       const d = parseDate(row[col.name]);
@@ -213,12 +214,16 @@ export function buildFeatureMatrix(
         hourOfDay.push(hour);
         dayOfWeek.push(dow);
         isWeekend.push(dow === 0 || dow === 6 ? 1 : 0);
-        isOutOfHours.push(hour < 8 || hour >= 17 ? 1 : 0);
+        // Deep night only: before 6am or 10pm+
+        isOutOfHours.push(hour < 6 || hour >= 22 ? 1 : 0);
+        // Twilight zone: 6-8am or 5-10pm
+        isExtendedHours.push((hour >= 6 && hour < 8) || (hour >= 17 && hour < 22) ? 1 : 0);
       } else {
         hourOfDay.push(0);
         dayOfWeek.push(0);
         isWeekend.push(0);
         isOutOfHours.push(0);
+        isExtendedHours.push(0);
       }
     }
 
@@ -230,6 +235,8 @@ export function buildFeatureMatrix(
     featureNames.push(`${col.name}_isWeekend`);
     featureColumns.push(isOutOfHours);
     featureNames.push(`${col.name}_isOutOfHours`);
+    featureColumns.push(isExtendedHours);
+    featureNames.push(`${col.name}_isExtendedHours`);
   }
 
   // ---- Boolean columns: 0/1 ----

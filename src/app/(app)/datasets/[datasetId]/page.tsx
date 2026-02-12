@@ -115,12 +115,12 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
               <TabsList>
                 <TabsTrigger value="preview">Preview</TabsTrigger>
                 <TabsTrigger value="schema">Schema</TabsTrigger>
-                <TabsTrigger value="validation" disabled={!latestRun?.validation_json}>
-                  Validation
-                </TabsTrigger>
-                <TabsTrigger value="profiling" disabled={!latestRun?.profiling_json}>
-                  Profiling
-                </TabsTrigger>
+                {latestRun?.validation_json?.requiredColumns && (
+                  <TabsTrigger value="validation">Validation</TabsTrigger>
+                )}
+                {latestRun?.profiling_json?.rowCount != null && (
+                  <TabsTrigger value="profiling">Profiling</TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="preview">
@@ -131,21 +131,17 @@ export default function DatasetDetailPage({ params }: { params: Promise<{ datase
                 {dataset.schema_json && <SchemaTab schema={dataset.schema_json} />}
               </TabsContent>
 
-              <TabsContent value="validation">
-                {latestRun?.validation_json?.requiredColumns ? (
+              {latestRun?.validation_json?.requiredColumns && (
+                <TabsContent value="validation">
                   <ValidationPanel validation={latestRun.validation_json} />
-                ) : (
-                  <p className="text-muted-foreground text-sm">Validation data not available.</p>
-                )}
-              </TabsContent>
+                </TabsContent>
+              )}
 
-              <TabsContent value="profiling">
-                {latestRun?.profiling_json?.rowCount != null ? (
+              {latestRun?.profiling_json?.rowCount != null && (
+                <TabsContent value="profiling">
                   <ProfilingCards profiling={latestRun.profiling_json} />
-                ) : (
-                  <p className="text-muted-foreground text-sm">Profiling data not available.</p>
-                )}
-              </TabsContent>
+                </TabsContent>
+              )}
             </Tabs>
           </div>
         </FadeIn>

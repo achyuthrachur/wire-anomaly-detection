@@ -247,7 +247,8 @@ function generateHighAmountAnomaly(
   return row;
 }
 
-// Pattern 2: Burst — composite anomaly (moderate high amount + extended hours + no callback)
+// Pattern 2: Burst — composite anomaly (moderate high amount + no callback)
+// Signal comes from amount + callback, NOT timing — uses business hours from base row
 function generateBurstAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -260,10 +261,6 @@ function generateBurstAnomaly(
   // Moderate high amount (3-8x)
   const baseAmount = parseFloat(row.Amount);
   row.Amount = (baseAmount * (3 + rng() * 5)).toFixed(2);
-  // Extended hours (17-22) — not deep night, but after business
-  const burstDate = uniformDateSample(rng, dateStart, dateEnd);
-  burstDate.setHours(17 + Math.floor(rng() * 5), Math.floor(rng() * 60), Math.floor(rng() * 60));
-  row.WireDate = burstDate.toISOString();
   // No callback verification
   row.CallbackVerified = 'false';
   row.IsAnomaly = '1';
@@ -314,7 +311,8 @@ function generateRiskCorridorAnomaly(
   return row;
 }
 
-// Pattern 5: SOD Exception (initiator == reviewer) + extended hours + moderate amount
+// Pattern 5: SOD Exception (initiator == reviewer) + moderate amount
+// Signal comes from Initiator/Reviewer overlap + amount, NOT timing — uses business hours from base row
 function generateSODAnomaly(
   rng: () => number,
   pools: EntityPools,
@@ -326,10 +324,6 @@ function generateSODAnomaly(
   const row = generateNormalRow(rng, pools, config, dateStart, dateEnd, idx);
   // Same person as reviewer
   row.Reviewer = row.Initiator.replace('INI-', 'REV-');
-  // Extended hours (17-22)
-  const sodDate = uniformDateSample(rng, dateStart, dateEnd);
-  sodDate.setHours(17 + Math.floor(rng() * 5), Math.floor(rng() * 60), Math.floor(rng() * 60));
-  row.WireDate = sodDate.toISOString();
   // Moderately high amount (2-4x)
   const baseAmount = parseFloat(row.Amount);
   row.Amount = (baseAmount * (2 + rng() * 2)).toFixed(2);
