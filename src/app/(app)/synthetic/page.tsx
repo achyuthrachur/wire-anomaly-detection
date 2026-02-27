@@ -4,7 +4,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
-import { AnomalyMixSliders } from '@/components/synthetic/AnomalyMixSliders';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,7 +15,6 @@ import {
   Users,
   BarChart3,
   CalendarDays,
-  ShieldAlert,
   Sparkles,
   Loader2,
   Check,
@@ -36,11 +34,8 @@ interface FormState {
   reviewers: number;
   customers: number;
   beneficiaries: number;
-  anomalyRateTraining: number;
-  anomalyRateScoring: number;
   amountMu: number;
   amountSigma: number;
-  anomalyMix: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +57,17 @@ function defaultDates() {
   };
 }
 
+// Calibrated anomaly config — hardwired for demo consistency
+const ANOMALY_RATE_TRAINING = 0.007; // ~140 anomalies / 20K rows
+const ANOMALY_RATE_SCORING = 0.004; // ~24 anomalies / 6K rows
+const ANOMALY_MIX = {
+  highAmount: 0.3,
+  burst: 0.2,
+  outOfHoursIrregular: 0.2,
+  riskCorridorCallbackBypass: 0.2,
+  sodException: 0.1,
+};
+
 const INITIAL_STATE: FormState = {
   mode: 'both',
   seed: 1337,
@@ -71,17 +77,8 @@ const INITIAL_STATE: FormState = {
   reviewers: 120,
   customers: 12_000,
   beneficiaries: 18_000,
-  anomalyRateTraining: 0.007,
-  anomalyRateScoring: 0.004,
   amountMu: 9.1,
   amountSigma: 1.0,
-  anomalyMix: {
-    highAmount: 0.3,
-    burst: 0.2,
-    outOfHoursIrregular: 0.2,
-    riskCorridorCallbackBypass: 0.2,
-    sodException: 0.1,
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -98,7 +95,6 @@ const SECTIONS: SectionDef[] = [
   { id: 'population', label: 'Population & Volume', icon: <Users className="h-4 w-4" /> },
   { id: 'distributions', label: 'Distributions', icon: <BarChart3 className="h-4 w-4" /> },
   { id: 'controls', label: 'Date Controls', icon: <CalendarDays className="h-4 w-4" /> },
-  { id: 'anomaly', label: 'Anomaly Mix', icon: <ShieldAlert className="h-4 w-4" /> },
   { id: 'generate', label: 'Generate', icon: <Sparkles className="h-4 w-4" /> },
 ];
 
@@ -142,7 +138,7 @@ export default function SyntheticWizardPage() {
               nRows: form.nRowsTraining,
               dateStart: dates.trainingStart,
               dateEnd: dates.trainingEnd,
-              anomalyRate: form.anomalyRateTraining,
+              anomalyRate: ANOMALY_RATE_TRAINING,
             },
           }
         : {}),
@@ -150,7 +146,7 @@ export default function SyntheticWizardPage() {
         nRows: form.nRowsScoring,
         dateStart: dates.scoringStart,
         dateEnd: dates.scoringEnd,
-        anomalyRate: form.anomalyRateScoring,
+        anomalyRate: ANOMALY_RATE_SCORING,
         hideLabelsByDefault: true,
       },
       population: {
@@ -163,7 +159,7 @@ export default function SyntheticWizardPage() {
         amount: { family: 'lognormal', mu: form.amountMu, sigma: form.amountSigma },
         wiresPerCustomer: { family: 'negbin', mean: 8, dispersion: 2 },
       },
-      anomalyMix: form.anomalyMix,
+      anomalyMix: ANOMALY_MIX,
     };
   }, [form, dates]);
 
@@ -357,22 +353,6 @@ export default function SyntheticWizardPage() {
                     onChange={(v) => handleNumericInput('beneficiaries', v)}
                     hint="Unique beneficiary accounts"
                   />
-                  {form.mode === 'both' && (
-                    <NumberField
-                      label="Training Anomaly Rate"
-                      value={form.anomalyRateTraining}
-                      onChange={(v) => handleNumericInput('anomalyRateTraining', v)}
-                      hint="Fraction of anomalous rows (training)"
-                      step="0.001"
-                    />
-                  )}
-                  <NumberField
-                    label="Scoring Anomaly Rate"
-                    value={form.anomalyRateScoring}
-                    onChange={(v) => handleNumericInput('anomalyRateScoring', v)}
-                    hint="Fraction of anomalous rows (scoring)"
-                    step="0.001"
-                  />
                 </div>
               </CardContent>
             </Card>
@@ -483,37 +463,8 @@ export default function SyntheticWizardPage() {
             </Card>
           </FadeIn>
 
-          {/* ─── Section 4: Anomaly Mix ─── */}
+          {/* ─── Section 4: Generate ─── */}
           <FadeIn delay={250}>
-            <Card
-              id="anomaly"
-              className={cn(
-                'transition-shadow',
-                activeSection === 'anomaly' && 'ring-crowe-indigo-dark/20 ring-2'
-              )}
-              onClick={() => setActiveSection('anomaly')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShieldAlert className="text-crowe-indigo h-4.5 w-4.5" />
-                  Anomaly Mix
-                </CardTitle>
-                <CardDescription>
-                  Adjust the proportion of each anomaly type. Sliders automatically rebalance to sum
-                  to 100%.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AnomalyMixSliders
-                  value={form.anomalyMix}
-                  onChange={(mix) => updateField('anomalyMix', mix)}
-                />
-              </CardContent>
-            </Card>
-          </FadeIn>
-
-          {/* ─── Section 5: Generate ─── */}
-          <FadeIn delay={300}>
             <Card
               id="generate"
               className={cn(
@@ -557,6 +508,11 @@ export default function SyntheticWizardPage() {
                   />
                   <SummaryChip label="Seed" value={String(form.seed)} />
                 </div>
+
+                {/* Calibrated anomaly note */}
+                <p className="text-muted-foreground text-xs">
+                  Calibrated anomaly profiles applied automatically.
+                </p>
 
                 {/* Error */}
                 {error && (
