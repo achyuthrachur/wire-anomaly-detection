@@ -4,7 +4,6 @@ import type {
   RunWithDataset,
   ValidationResult,
   ProfilingResult,
-  InferredSchema,
   ScoringsSummary,
 } from '@/lib/db/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,7 +18,7 @@ import Link from 'next/link';
 import { Download, ExternalLink } from 'lucide-react';
 
 interface RunDetailProps {
-  run: RunWithDataset & { blob_url: string; schema_json: InferredSchema };
+  run: RunWithDataset;
 }
 
 export function RunDetail({ run }: RunDetailProps) {

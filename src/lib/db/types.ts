@@ -77,6 +77,8 @@ export interface RunWithDataset extends Run {
   dataset_name: string;
   source_format: 'csv' | 'xlsx';
   row_count: number;
+  blob_url: string;
+  schema_json: InferredSchema;
 }
 
 // ---------------------------------------------------------------------------

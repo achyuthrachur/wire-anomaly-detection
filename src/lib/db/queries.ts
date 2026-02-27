@@ -101,7 +101,8 @@ export async function updateRunStatus(
 
 export async function listRuns(): Promise<RunWithDataset[]> {
   const rows = await sql(`
-    SELECT r.*, d.name AS dataset_name, d.source_format, d.row_count
+    SELECT r.*, d.name AS dataset_name, d.source_format, d.row_count,
+           d.blob_url, d.schema_json
     FROM runs r
     JOIN datasets d ON r.dataset_id = d.id
     ORDER BY r.created_at DESC
@@ -109,9 +110,7 @@ export async function listRuns(): Promise<RunWithDataset[]> {
   return rows as unknown as RunWithDataset[];
 }
 
-export async function getRunById(
-  runId: string
-): Promise<(RunWithDataset & { blob_url: string; schema_json: unknown }) | null> {
+export async function getRunById(runId: string): Promise<RunWithDataset | null> {
   const rows = await sql(
     `
     SELECT r.*, d.name AS dataset_name, d.source_format, d.row_count,
@@ -122,12 +121,7 @@ export async function getRunById(
     `,
     [runId]
   );
-  return (
-    (rows[0] as unknown as RunWithDataset & {
-      blob_url: string;
-      schema_json: unknown;
-    }) ?? null
-  );
+  return (rows[0] as unknown as RunWithDataset) ?? null;
 }
 
 // ---------------------------------------------------------------------------
