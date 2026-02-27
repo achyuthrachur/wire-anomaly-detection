@@ -100,15 +100,15 @@ function getStatusVariant(status: string): 'default' | 'secondary' | 'outline' |
 }
 
 function getMetricColor(value: number): string {
-  if (value > 0.5) return 'text-emerald-700';
+  if (value > 0.5) return 'text-crowe-teal-dark';
   if (value > 0.2) return 'text-crowe-amber-dark';
   return 'text-crowe-coral';
 }
 
 function getMetricBgColor(value: number): string {
-  if (value > 0.5) return 'bg-emerald-50 border-emerald-200';
+  if (value > 0.5) return 'bg-crowe-teal/10 border-crowe-teal/30';
   if (value > 0.2) return 'bg-amber-50 border-amber-200';
-  return 'bg-red-50 border-red-200';
+  return 'bg-crowe-coral/10 border-crowe-coral/30';
 }
 
 /** Build 10-bucket histogram from scores */
@@ -144,6 +144,8 @@ export default function ResultsPage({ params }: { params: Promise<{ runId: strin
         setRun(data.run);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load run');
+      } finally {
+        setLoading(false);
       }
     }
     fetchRun();
@@ -182,12 +184,12 @@ export default function ResultsPage({ params }: { params: Promise<{ runId: strin
   // Compute confusion matrix (if labels present)
   const confusionMatrix = useMemo(() => {
     if (!metrics || !summary.flaggedCount || !summary.rowCount) return null;
-    const flagged = summary.flaggedCount;
-    const total = summary.rowCount;
-    const tp = Math.round(metrics.precision * flagged);
-    const fp = flagged - tp;
-    const fn = metrics.recall > 0 ? Math.round(tp / metrics.recall - tp) : 0;
-    const tn = total - tp - fp - fn;
+    const flaggedCount = summary.flaggedCount!;
+    const rowCount = summary.rowCount!;
+    const tp = Math.round(metrics.precision * flaggedCount);
+    const fp = flaggedCount - tp;
+    const fn = metrics.recall > 0 ? Math.round(((1 - metrics.recall) / metrics.recall) * tp) : 0;
+    const tn = Math.max(0, rowCount - tp - fp - fn);
     return { tp, fp, fn, tn };
   }, [metrics, summary.flaggedCount, summary.rowCount]);
 
@@ -658,23 +660,23 @@ export default function ResultsPage({ params }: { params: Promise<{ runId: strin
                     </div>
 
                     {/* TP - True Positive */}
-                    <div className="flex flex-col items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 p-5">
-                      <CheckCircle2 className="mb-1 h-5 w-5 text-emerald-600" />
-                      <span className="text-[10px] font-medium tracking-wider text-emerald-700 uppercase">
+                    <div className="border-crowe-teal/30 bg-crowe-teal/10 flex flex-col items-center justify-center rounded-lg border p-5">
+                      <CheckCircle2 className="text-crowe-teal-dark mb-1 h-5 w-5" />
+                      <span className="text-crowe-teal-dark text-[10px] font-medium tracking-wider uppercase">
                         True Positive
                       </span>
-                      <span className="mt-1 text-2xl font-bold text-emerald-800 tabular-nums">
+                      <span className="text-crowe-teal-dark mt-1 text-2xl font-bold tabular-nums">
                         {formatNumber(confusionMatrix.tp, 0)}
                       </span>
                     </div>
 
                     {/* FP - False Positive */}
-                    <div className="flex flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 p-5">
-                      <XCircle className="mb-1 h-5 w-5 text-red-500" />
-                      <span className="text-[10px] font-medium tracking-wider text-red-700 uppercase">
+                    <div className="border-crowe-coral/30 bg-crowe-coral/10 flex flex-col items-center justify-center rounded-lg border p-5">
+                      <XCircle className="text-crowe-coral mb-1 h-5 w-5" />
+                      <span className="text-crowe-coral text-[10px] font-medium tracking-wider uppercase">
                         False Positive
                       </span>
-                      <span className="mt-1 text-2xl font-bold text-red-800 tabular-nums">
+                      <span className="text-crowe-coral mt-1 text-2xl font-bold tabular-nums">
                         {formatNumber(confusionMatrix.fp, 0)}
                       </span>
                     </div>

@@ -41,7 +41,7 @@ const contributionLevelBadge: Record<
 > = {
   high: {
     label: 'High',
-    className: 'bg-red-100 text-red-800 border-red-200',
+    className: 'bg-crowe-coral/10 text-crowe-coral border-crowe-coral/30',
   },
   medium: {
     label: 'Medium',
@@ -65,6 +65,7 @@ export default function WireDrilldownPage({
   const [shapFeatures, setShapFeatures] = useState<ShapFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isApproxShap, setIsApproxShap] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -91,6 +92,7 @@ export default function WireDrilldownPage({
 
         // If no local explain blob, derive approximate features from reason codes
         if (!data.finding.localExplainBlobUrl && data.finding.reasonCodes?.length) {
+          setIsApproxShap(true);
           const approx: ShapFeature[] = data.finding.reasonCodes.map(
             (rc: ReasonCodeEntry, i: number) => ({
               name: rc.code,
@@ -179,7 +181,7 @@ export default function WireDrilldownPage({
                       ? 'text-crowe-coral'
                       : finding.score > 0.3
                         ? 'text-crowe-amber-dark'
-                        : 'text-emerald-600'
+                        : 'text-crowe-teal-dark'
                   )}
                 >
                   {finding.score.toFixed(3)}
@@ -191,8 +193,8 @@ export default function WireDrilldownPage({
                 className={cn(
                   'h-8 gap-1.5 px-3 text-sm font-medium',
                   isFlagged
-                    ? 'border-red-200 bg-red-100 text-red-800'
-                    : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                    ? 'border-crowe-coral/30 bg-crowe-coral/10 text-crowe-coral'
+                    : 'border-crowe-teal/30 bg-crowe-teal/10 text-crowe-teal-dark'
                 )}
                 variant="outline"
               >
@@ -273,6 +275,14 @@ export default function WireDrilldownPage({
               <CardTitle className="text-lg">Feature Contributions</CardTitle>
             </CardHeader>
             <CardContent>
+              {isApproxShap && (
+                <div className="border-crowe-amber/30 bg-crowe-amber/5 mb-4 rounded-lg border px-4 py-2.5">
+                  <p className="text-crowe-amber-dark text-xs">
+                    Feature contributions are estimated from reason codes. Exact SHAP values are not
+                    available for this wire.
+                  </p>
+                </div>
+              )}
               <ShapWaterfall features={shapFeatures} />
             </CardContent>
           </Card>

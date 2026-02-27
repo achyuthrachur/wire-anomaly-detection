@@ -10,16 +10,14 @@ interface UseScrollRevealOptions {
 export function useScrollReveal(options: UseScrollRevealOptions = {}) {
   const { threshold = 0.15, rootMargin = '0px' } = options;
   const ref = useRef<HTMLDivElement>(null);
-  const [hasRevealed, setHasRevealed] = useState(false);
+  const [hasRevealed, setHasRevealed] = useState(
+    () =>
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setHasRevealed(true);
-      return;
-    }
 
     const observer = new IntersectionObserver(
       ([entry]) => {

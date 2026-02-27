@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
   Upload,
   List,
@@ -49,7 +50,11 @@ export function Navbar() {
       const res = await fetch('/api/admin/reset', { method: 'POST' });
       if (res.ok) {
         window.location.reload();
+      } else {
+        toast.error('Failed to reset demo data');
       }
+    } catch {
+      toast.error('Failed to reset demo data');
     } finally {
       setResetting(false);
       setResetDialogOpen(false);

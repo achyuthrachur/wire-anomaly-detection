@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Play, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ModelOption {
   id: string;
@@ -33,6 +34,8 @@ export function StartScoringDialog({ datasetId, onStarted }: StartScoringDialogP
   const [loadingModels, setLoadingModels] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [reviewRate, setReviewRate] = useState('0.005');
+  const [thresholdMode, setThresholdMode] = useState<'reviewRate' | 'threshold'>('reviewRate');
+  const [threshold, setThreshold] = useState('0.5');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,24 +68,33 @@ export function StartScoringDialog({ datasetId, onStarted }: StartScoringDialogP
       return;
     }
 
-    const parsedRate = parseFloat(reviewRate);
-    if (isNaN(parsedRate) || parsedRate <= 0 || parsedRate > 1) {
-      setError('Review rate must be between 0.0001 and 1.');
-      return;
+    if (thresholdMode === 'reviewRate') {
+      const parsedRate = parseFloat(reviewRate);
+      if (isNaN(parsedRate) || parsedRate <= 0 || parsedRate > 1) {
+        setError('Review rate must be between 0.0001 and 1.');
+        return;
+      }
+    } else {
+      const parsedThreshold = parseFloat(threshold);
+      if (isNaN(parsedThreshold) || parsedThreshold < 0 || parsedThreshold > 1) {
+        setError('Score threshold must be between 0 and 1.');
+        return;
+      }
     }
 
     setSubmitting(true);
     setError(null);
 
     try {
+      const body =
+        thresholdMode === 'reviewRate'
+          ? { datasetId, modelId: selectedModelId, reviewRate: parseFloat(reviewRate) }
+          : { datasetId, modelId: selectedModelId, threshold: parseFloat(threshold) };
+
       const res = await fetch('/api/score/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          datasetId,
-          modelId: selectedModelId,
-          reviewRate: parsedRate,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -144,23 +156,73 @@ export function StartScoringDialog({ datasetId, onStarted }: StartScoringDialogP
             )}
           </div>
 
-          {/* Review Rate */}
+          {/* Threshold Mode Toggle */}
           <div className="space-y-2">
-            <Label htmlFor="scoring-review-rate">Review Rate</Label>
-            <Input
-              id="scoring-review-rate"
-              type="number"
-              step="0.001"
-              min="0.0001"
-              max="1"
-              value={reviewRate}
-              onChange={(e) => setReviewRate(e.target.value)}
-              placeholder="0.005"
-            />
-            <p className="text-tint-500 text-xs">
-              Fraction of transactions to flag for review (e.g. 0.005 = top 0.5%).
-            </p>
+            <Label>Flagging Method</Label>
+            <div className="flex overflow-hidden rounded-md border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setThresholdMode('reviewRate')}
+                className={cn(
+                  'flex-1 px-3 py-1.5 text-sm font-medium transition-colors',
+                  thresholdMode === 'reviewRate'
+                    ? 'bg-[#011E41] text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                )}
+              >
+                Review Rate
+              </button>
+              <button
+                type="button"
+                onClick={() => setThresholdMode('threshold')}
+                className={cn(
+                  'flex-1 px-3 py-1.5 text-sm font-medium transition-colors',
+                  thresholdMode === 'threshold'
+                    ? 'bg-[#011E41] text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                )}
+              >
+                Score Threshold
+              </button>
+            </div>
           </div>
+
+          {/* Conditional Input */}
+          {thresholdMode === 'reviewRate' ? (
+            <div className="space-y-2">
+              <Label htmlFor="scoring-review-rate">Review Rate</Label>
+              <Input
+                id="scoring-review-rate"
+                type="number"
+                step={0.001}
+                min={0.0001}
+                max={1}
+                value={reviewRate}
+                onChange={(e) => setReviewRate(e.target.value)}
+                placeholder="0.005"
+              />
+              <p className="text-tint-500 text-xs">
+                Fraction of transactions to flag (e.g. 0.005 = top 0.5%)
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="scoring-threshold">Score Threshold</Label>
+              <Input
+                id="scoring-threshold"
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                placeholder="0.5"
+              />
+              <p className="text-tint-500 text-xs">
+                Wires with a risk score at or above this value will be flagged as anomalous.
+              </p>
+            </div>
+          )}
 
           {error && <p className="text-crowe-coral text-sm font-medium">{error}</p>}
         </div>

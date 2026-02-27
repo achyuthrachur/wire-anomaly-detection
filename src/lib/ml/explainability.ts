@@ -100,8 +100,14 @@ export function generateReasonCodes(
   features: number[],
   featureNames: string[],
   importance: Record<string, number>,
-  shapValues?: ShapValues
+  shapValues?: ShapValues,
+  score?: number,
+  effectiveThreshold?: number
 ): ReasonCode[] {
+  if (score !== undefined && effectiveThreshold !== undefined && score < effectiveThreshold) {
+    return [];
+  }
+
   // If SHAP values are available, use the template-based matcher with SHAP
   if (shapValues) {
     const matched = matchReasonCodes(featureNames, features, shapValues.values, importance, 5);

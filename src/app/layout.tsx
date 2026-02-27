@@ -4,6 +4,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from '@/components/layout/Toaster';
 import { MotionProvider } from '@/components/motion/MotionProvider';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import './globals.css';
 
 const inter = Inter({
@@ -27,9 +28,9 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <MotionProvider>
           <Navbar />
-          <div className="min-h-screen">
-            {children}
-          </div>
+          <ErrorBoundary>
+            <div className="min-h-screen">{children}</div>
+          </ErrorBoundary>
           <Footer />
           <Toaster />
         </MotionProvider>

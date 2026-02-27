@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback, use } from 'react';
+import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
 import { FindingsKPIBar } from '@/components/findings/FindingsKPIBar';
@@ -68,7 +69,9 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [wireIdFilter, setWireIdFilter] = useState('');
   const [exporting, setExporting] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch run summary
   useEffect(() => {
@@ -89,7 +92,11 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
   const fetchFindings = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/runs/${runId}/findings?offset=${offset}&limit=${PAGE_SIZE}`);
+      let url = `/api/runs/${runId}/findings?offset=${offset}&limit=${PAGE_SIZE}`;
+      if (wireIdFilter) {
+        url += `&wireId=${encodeURIComponent(wireIdFilter)}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load findings');
       const data = await res.json();
       setFindings(data.findings ?? []);
@@ -99,11 +106,21 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
     } finally {
       setLoading(false);
     }
-  }, [runId, offset]);
+  }, [runId, offset, wireIdFilter]);
 
   useEffect(() => {
     fetchFindings();
   }, [fetchFindings]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setWireIdFilter(value);
+      setOffset(0);
+    }, 300);
+  };
 
   async function handleExportCsv() {
     setExporting(true);
@@ -141,15 +158,13 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      // Best effort
+      toast.error('Failed to export CSV. Please try again.');
     } finally {
       setExporting(false);
     }
   }
 
-  const filteredFindings = searchTerm
-    ? findings.filter((f) => f.wireId.toLowerCase().includes(searchTerm.toLowerCase()))
-    : findings;
+  const filteredFindings = findings;
 
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -223,7 +238,7 @@ export default function FindingsPage({ params }: { params: Promise<{ runId: stri
                 <Input
                   placeholder="Search by Wire ID..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchChange}
                   className="pl-9"
                 />
               </div>

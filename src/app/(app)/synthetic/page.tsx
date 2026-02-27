@@ -120,11 +120,14 @@ export default function SyntheticWizardPage() {
   }, []);
 
   const handleNumericInput = useCallback(
-    (key: keyof FormState, raw: string) => {
-      const parsed = Number(raw);
-      if (!isNaN(parsed)) {
-        updateField(key, parsed as FormState[typeof key]);
+    (key: keyof FormState, raw: string, min?: number, max?: number) => {
+      if (raw === '' || isNaN(Number(raw))) {
+        updateField(key, INITIAL_STATE[key]);
+        return;
       }
+      const parsed = Number(raw);
+      const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, parsed));
+      updateField(key, clamped as FormState[typeof key]);
     },
     [updateField]
   );

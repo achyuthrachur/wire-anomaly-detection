@@ -173,7 +173,14 @@ export async function runScoringPipeline(
     }
 
     // Generate reason codes (with SHAP if available)
-    const reasonCodes = generateReasonCodes(X[index], featureNames, importance, shapValues);
+    const reasonCodes = generateReasonCodes(
+      X[index],
+      featureNames,
+      importance,
+      shapValues,
+      score,
+      effectiveThreshold
+    );
 
     findings.push({
       wire_id: wireId,

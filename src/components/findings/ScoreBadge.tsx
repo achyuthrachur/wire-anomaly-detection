@@ -14,9 +14,9 @@ function getScoreColor(score: number): {
 } {
   if (score < 0.3) {
     return {
-      text: 'text-emerald-700',
-      bar: 'bg-emerald-500',
-      bg: 'bg-emerald-50',
+      text: 'text-crowe-teal-dark',
+      bar: 'bg-crowe-teal',
+      bg: 'bg-crowe-teal/10',
     };
   }
   if (score <= 0.7) {
@@ -29,7 +29,7 @@ function getScoreColor(score: number): {
   return {
     text: 'text-crowe-coral',
     bar: 'bg-crowe-coral',
-    bg: 'bg-red-50',
+    bg: 'bg-crowe-coral/10',
   };
 }
 

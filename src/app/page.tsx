@@ -5,28 +5,52 @@ import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
 import { StaggerChildren } from '@/components/motion/StaggerChildren';
-import { Upload, Shield, BarChart3, Clock } from 'lucide-react';
+import { Upload, Shield, BarChart3, Clock, Box, Wand2, BookOpen } from 'lucide-react';
 
 const FEATURES = [
   {
     icon: Upload,
     title: 'Upload & Parse',
     description: 'Drag & drop CSV or XLSX files. Schema is inferred automatically from your data.',
+    href: '/upload',
   },
   {
     icon: Shield,
     title: 'Validate Structure',
-    description: 'Check required columns, detect type mismatches, flag missing values and duplicates.',
+    description:
+      'Check required columns, detect type mismatches, flag missing values and duplicates.',
+    href: '/datasets',
   },
   {
     icon: BarChart3,
     title: 'Profile Distributions',
-    description: 'Get statistical summaries, percentiles, cardinalities, and date ranges at a glance.',
+    description:
+      'Get statistical summaries, percentiles, cardinalities, and date ranges at a glance.',
+    href: '/datasets',
   },
   {
     icon: Clock,
     title: 'Track Run History',
     description: 'Every upload creates a run. Review past validations, export results as JSON.',
+    href: '/runs',
+  },
+  {
+    icon: Box,
+    title: 'Model Registry',
+    description: 'Browse and manage trained models.',
+    href: '/models',
+  },
+  {
+    icon: Wand2,
+    title: 'Synthetic Data Studio',
+    description: 'Generate realistic wire transfer datasets.',
+    href: '/synthetic',
+  },
+  {
+    icon: BookOpen,
+    title: 'How It Works',
+    description: 'Technical documentation and methodology.',
+    href: '/methodology',
   },
 ];
 
@@ -34,16 +58,17 @@ export default function HomePage() {
   return (
     <PageContainer>
       <FadeIn>
-        <section className="flex flex-col items-center text-center pt-16 pb-20">
-          <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+        <section className="flex flex-col items-center pt-16 pb-20 text-center">
+          <h1 className="text-foreground text-4xl font-semibold tracking-tight sm:text-5xl">
             Wire Anomaly Detection
           </h1>
-          <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-            Upload wire transaction datasets, validate structure and quality, and profile key fields — all in one streamlined workflow.
+          <p className="text-muted-foreground mt-4 max-w-xl text-lg">
+            Upload wire transaction datasets, validate structure and quality, and profile key fields
+            — all in one streamlined workflow.
           </p>
           <div className="mt-8 flex items-center gap-4">
             <Link href="/upload">
-              <Button size="lg" className="gap-2 bg-crowe-indigo-dark hover:bg-crowe-indigo">
+              <Button size="lg" className="bg-crowe-indigo-dark hover:bg-crowe-indigo gap-2">
                 <Upload className="h-4 w-4" />
                 Start Upload
               </Button>
@@ -57,20 +82,21 @@ export default function HomePage() {
         </section>
       </FadeIn>
 
-      <StaggerChildren className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 pb-20">
+      <StaggerChildren className="grid gap-6 pb-20 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {FEATURES.map((feature) => (
-          <div
+          <Link
             key={feature.title}
-            className="rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md"
+            href={feature.href}
+            className="border-border bg-card block rounded-xl border p-6 transition-shadow hover:shadow-md"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-crowe-amber/10">
-              <feature.icon className="h-5 w-5 text-crowe-amber-dark" />
+            <div className="bg-crowe-amber/10 flex h-10 w-10 items-center justify-center rounded-lg">
+              <feature.icon className="text-crowe-amber-dark h-5 w-5" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">{feature.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            <h3 className="text-foreground mt-4 text-sm font-semibold">{feature.title}</h3>
+            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
               {feature.description}
             </p>
-          </div>
+          </Link>
         ))}
       </StaggerChildren>
     </PageContainer>

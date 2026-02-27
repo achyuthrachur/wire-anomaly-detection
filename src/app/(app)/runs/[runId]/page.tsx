@@ -7,10 +7,11 @@ import { DetailSkeleton } from '@/components/skeletons/DetailSkeleton';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import type { RunWithDataset } from '@/lib/db/types';
 
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params);
-  const [run, setRun] = useState<any>(null);
+  const [run, setRun] = useState<RunWithDataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +35,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     <PageContainer>
       <div className="mb-6">
         <Link href="/runs">
-          <Button variant="ghost" size="sm" className="gap-2 -ml-2">
+          <Button variant="ghost" size="sm" className="-ml-2 gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back to Runs
           </Button>
@@ -45,8 +46,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
       {error && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <AlertTriangle className="h-8 w-8 text-crowe-coral" />
-          <p className="text-sm text-muted-foreground">{error}</p>
+          <AlertTriangle className="text-crowe-coral h-8 w-8" />
+          <p className="text-muted-foreground text-sm">{error}</p>
           <Link href="/runs">
             <Button variant="outline">Back to Runs</Button>
           </Link>

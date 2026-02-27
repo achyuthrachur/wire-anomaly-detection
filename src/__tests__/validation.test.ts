@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validateDataset } from '@/lib/schema/validation';
-import type { ParsedData, InferredSchema } from '@/lib/schema/types';
+import type { ParsedData, InferredSchema, ColumnType } from '@/lib/schema/types';
 
 describe('validateDataset', () => {
   const makeData = (headers: string[], rows: Record<string, string>[]): ParsedData => ({
@@ -9,10 +9,10 @@ describe('validateDataset', () => {
     totalRows: rows.length,
   });
 
-  const makeSchema = (columns: Array<{ name: string; type: string }>): InferredSchema => ({
+  const makeSchema = (columns: Array<{ name: string; type: ColumnType }>): InferredSchema => ({
     columns: columns.map((c) => ({
       name: c.name,
-      type: c.type as any,
+      type: c.type,
       nullable: false,
       sampleValues: [],
     })),

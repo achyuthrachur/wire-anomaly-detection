@@ -14,13 +14,31 @@ interface HeroUploadCardProps {
 
 export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!disabled) setIsDragging(true);
-  }, [disabled]);
+  const validateFile = (file: File): string | null => {
+    const validExtensions = ['.csv', '.xlsx'];
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = validExtensions.some((ext) => fileName.endsWith(ext));
+    if (!hasValidExtension) {
+      return 'Please upload a CSV or Excel (.xlsx) file.';
+    }
+    const maxSizeBytes = 50 * 1024 * 1024; // 50 MB
+    if (file.size > maxSizeBytes) {
+      return 'File size must be 50 MB or less.';
+    }
+    return null;
+  };
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!disabled) setIsDragging(true);
+    },
+    [disabled]
+  );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -28,15 +46,26 @@ export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) 
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (disabled) return;
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      if (disabled) return;
 
-    const file = e.dataTransfer.files[0];
-    if (file) onFileSelect(file);
-  }, [disabled, onFileSelect]);
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        const error = validateFile(file);
+        if (error) {
+          setValidationError(error);
+          return;
+        }
+        setValidationError(null);
+        onFileSelect(file);
+      }
+    },
+    [disabled, onFileSelect]
+  );
 
   const handleClick = () => {
     if (!disabled) inputRef.current?.click();
@@ -44,7 +73,15 @@ export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) onFileSelect(file);
+    if (file) {
+      const error = validateFile(file);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      setValidationError(null);
+      onFileSelect(file);
+    }
   };
 
   return (
@@ -74,9 +111,7 @@ export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) 
         <div
           className={cn(
             'flex h-20 w-20 items-center justify-center rounded-2xl transition-all duration-200',
-            isDragging
-              ? 'bg-crowe-amber/20 scale-110'
-              : 'bg-crowe-indigo-dark/5'
+            isDragging ? 'bg-crowe-amber/20 scale-110' : 'bg-crowe-indigo-dark/5'
           )}
         >
           <Upload
@@ -88,11 +123,10 @@ export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) 
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold text-foreground">
-            Upload a Wire Dataset
-          </h2>
-          <p className="mx-auto max-w-md text-sm text-muted-foreground">
-            We&apos;ll validate structure, profile key fields, and prepare the run for anomaly detection.
+          <h2 className="text-foreground text-2xl font-semibold">Upload a Wire Dataset</h2>
+          <p className="text-muted-foreground mx-auto max-w-md text-sm">
+            We&apos;ll validate structure, profile key fields, and prepare the run for anomaly
+            detection.
           </p>
         </div>
 
@@ -105,14 +139,18 @@ export function HeroUploadCard({ onFileSelect, disabled }: HeroUploadCardProps) 
             <FileSpreadsheet className="h-3 w-3" />
             XLSX
           </Badge>
-          <span className="text-xs text-tint-500">up to 50 MB</span>
+          <span className="text-tint-500 text-xs">up to 50 MB</span>
         </div>
 
         <Button variant="outline" size="lg" className="mt-2" disabled={disabled}>
           Choose File
         </Button>
 
-        <div className="flex items-center gap-2 text-xs text-tint-500">
+        {validationError && (
+          <p className="mt-2 text-sm font-medium text-red-600">{validationError}</p>
+        )}
+
+        <div className="text-tint-500 flex items-center gap-2 text-xs">
           <Shield className="h-3.5 w-3.5" />
           <span>Use synthetic demo data only. No customer PII required.</span>
         </div>

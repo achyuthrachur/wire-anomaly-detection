@@ -18,7 +18,7 @@ export const REASON_CODE_TEMPLATES: ReasonCodeTemplate[] = [
     code: 'HighAmountVsBaseline',
     description: 'Transaction amount significantly above baseline',
     featurePatterns: [/amount.*zscore/i, /amount.*log/i, /^amount$/i, /amt.*zscore/i],
-    minAbsShap: 0.01,
+    minAbsShap: 0.02,
   },
   {
     code: 'OutOfHours',
@@ -54,13 +54,13 @@ export const REASON_CODE_TEMPLATES: ReasonCodeTemplate[] = [
     code: 'BurstActivity',
     description: 'Multiple wires from same customer in rapid sequence',
     featurePatterns: [/burst/i, /rapid.*sequence/i, /frequency/i],
-    minAbsShap: 0.01,
+    minAbsShap: 0.02,
   },
   {
     code: 'IrregularApproval',
     description: 'Approval level inconsistent with transaction characteristics',
     featurePatterns: [/approval.*level/i, /approvallevel/i],
-    minAbsShap: 0.01,
+    minAbsShap: 0.02,
   },
 ];
 
@@ -102,12 +102,7 @@ export function matchReasonCodes(
       }
 
       if (template.minAbsShap !== undefined) {
-        triggered = triggered || Math.abs(shapVal) >= template.minAbsShap;
-      }
-
-      // Also trigger if importance is high
-      if (!triggered && impVal > 0.05) {
-        triggered = true;
+        triggered = triggered || shapVal >= template.minAbsShap;
       }
 
       if (triggered) {

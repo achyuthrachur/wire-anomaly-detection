@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FadeIn } from '@/components/motion/FadeIn';
 import { StaggerChildren } from '@/components/motion/StaggerChildren';
@@ -65,6 +66,7 @@ export default function ModelDetailPage({ params }: { params: Promise<{ modelId:
       await fetchModel();
     } catch (err) {
       console.error('Failed to set champion:', err);
+      toast.error('Failed to set champion model. Please try again.');
     } finally {
       setSettingChampion(false);
     }

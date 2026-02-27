@@ -475,6 +475,7 @@ export async function listFindingsByRunId(
     minScore?: number;
     maxScore?: number;
     reasonCodes?: string[];
+    wireId?: string;
   }
 ): Promise<Finding[]> {
   const conditions: string[] = ['run_id = $1'];
@@ -498,6 +499,11 @@ export async function listFindingsByRunId(
       return `reason_codes_json @> ('[{"code":"' || $${idx++} || '"}]')::jsonb`;
     });
     conditions.push(`(${rcConditions.join(' OR ')})`);
+  }
+  if (filters?.wireId) {
+    conditions.push(`wire_id ILIKE $${idx}`);
+    params.push(`%${filters.wireId}%`);
+    idx++;
   }
 
   params.push(limit, offset);
@@ -525,6 +531,7 @@ export async function countFindingsByRunId(
     minScore?: number;
     maxScore?: number;
     reasonCodes?: string[];
+    wireId?: string;
   }
 ): Promise<number> {
   const conditions: string[] = ['run_id = $1'];
@@ -547,6 +554,11 @@ export async function countFindingsByRunId(
       return `reason_codes_json @> ('[{"code":"' || $${idx++} || '"}]')::jsonb`;
     });
     conditions.push(`(${rcConditions.join(' OR ')})`);
+  }
+  if (filters?.wireId) {
+    conditions.push(`wire_id ILIKE $${idx}`);
+    params.push(`%${filters.wireId}%`);
+    idx++;
   }
 
   const rows = await sql(

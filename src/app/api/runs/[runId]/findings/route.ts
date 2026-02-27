@@ -22,8 +22,9 @@ export async function GET(
       : undefined;
     const reasonCodesParam = searchParams.get('reasonCodes');
     const reasonCodes = reasonCodesParam ? reasonCodesParam.split(',') : undefined;
+    const wireId = searchParams.get('wireId') ?? undefined;
 
-    const filters = { minScore, maxScore, reasonCodes };
+    const filters = { minScore, maxScore, reasonCodes, wireId };
 
     const [findings, total] = await Promise.all([
       listFindingsByRunId(runId, offset, limit, filters),

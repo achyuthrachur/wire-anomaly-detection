@@ -27,6 +27,7 @@ import type {
   BakeoffProgress as BakeoffProgressType,
 } from '@/lib/db/types';
 import { formatDate } from '@/lib/utils/index';
+import { toast } from 'sonner';
 
 export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeoffId: string }> }) {
   const { bakeoffId } = use(params);
@@ -42,13 +43,14 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
   const [orchestrating, setOrchestrating] = useState(false);
   const [orchestrationError, setOrchestrationError] = useState<string | null>(null);
   const abortRef = useRef(false);
+  const mountTimeRef = useRef<number>(Date.now());
 
   const fetchBakeoff = useCallback(
     async (retryCount = 0) => {
       try {
         const res = await fetch(`/api/bakeoff/${bakeoffId}`);
         if (!res.ok) {
-          if (res.status === 404 && retryCount < 2) {
+          if (res.status === 404 && retryCount < 2 && Date.now() - mountTimeRef.current < 5000) {
             setTimeout(() => fetchBakeoff(retryCount + 1), 1500);
             return;
           }
@@ -194,6 +196,7 @@ export default function BakeoffDetailPage({ params }: { params: Promise<{ bakeof
       await fetchBakeoff();
     } catch (err) {
       console.error('Failed to set champion:', err);
+      toast.error('Failed to set champion model. Please try again.');
     } finally {
       setSettingChampion(false);
     }
